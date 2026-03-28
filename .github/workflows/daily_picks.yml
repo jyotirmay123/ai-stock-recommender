@@ -1,0 +1,44 @@
+name: Daily Stock Picks → Telegram
+
+# ─────────────────────────────────────────────────────────────────
+# Runs every weekday at 08:00 UTC = 09:00 Berlin CET (winter).
+# For CEST (summer, UTC+2) this fires at 10:00 Berlin — acceptable.
+# You can also trigger it manually from the Actions tab.
+# ─────────────────────────────────────────────────────────────────
+on:
+  schedule:
+    - cron: "0 8 * * 1-5"   # Mon–Fri 08:00 UTC
+  workflow_dispatch:          # manual run button in GitHub UI
+
+jobs:
+  send-picks:
+    name: Fetch & send daily BUY picks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # 1. Check out the repo
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Set up Python 3.11
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      # 3. Install dependencies (only what daily_picks.py needs)
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install yfinance pandas numpy requests
+
+      # 4. Run the script
+      #    Secrets are injected as env vars; secret() in the script
+      #    picks them up via os.environ.get() automatically.
+      - name: Run daily_picks.py
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python daily_picks.py

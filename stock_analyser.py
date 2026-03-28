@@ -12,9 +12,17 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import requests
 import json as _json
 import warnings
+
+BERLIN = ZoneInfo("Europe/Berlin")
+
+
+def now_berlin() -> datetime:
+    """Current datetime in Europe/Berlin timezone."""
+    return datetime.now(BERLIN)
 warnings.filterwarnings("ignore")
 
 from portfolio_manager import (
@@ -848,7 +856,7 @@ def send_telegram_message(text: str) -> bool:
 def format_telegram_picks(results_by_market: dict) -> str:
     lines = [
         "📈 <b>AI Stock Recommender — Top BUY Picks</b>",
-        f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M')} UTC",
+        f"📅 {now_berlin().strftime('%Y-%m-%d %H:%M')} Berlin",
         "",
     ]
     for market, mkt_results in results_by_market.items():
@@ -972,7 +980,7 @@ TELEGRAM_CHAT_ID   = "your_chat_id"
                 """)
 
         st.divider()
-        st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+        st.caption(f"Last updated: {now_berlin().strftime('%Y-%m-%d %H:%M')} Berlin")
         st.caption("Data: Yahoo Finance · Prices in EUR")
 
     # ── Global CSS ───────────────────────────
@@ -1516,7 +1524,7 @@ TELEGRAM_CHAT_ID   = "your_chat_id"
                                         "avg_price": h["avg_price"],
                                     }
                                 india_block["holdings"]    = new_holdings
-                                india_block["last_updated"] = datetime.now().strftime("%Y-%m-%d")
+                                india_block["last_updated"] = now_berlin().strftime("%Y-%m-%d")
                                 india_block["source"]       = "gemini_screenshot"
                                 pf["india"]                 = india_block
                                 st.session_state.portfolio  = pf
@@ -1548,7 +1556,7 @@ TELEGRAM_CHAT_ID   = "your_chat_id"
                     "qty":       qty_in,
                     "avg_price": atp_in,
                 }
-                india_block["last_updated"] = datetime.now().strftime("%Y-%m-%d")
+                india_block["last_updated"] = now_berlin().strftime("%Y-%m-%d")
                 pf["india"] = india_block
                 st.session_state.portfolio = pf
                 save_portfolio(pf)
@@ -1684,7 +1692,7 @@ TELEGRAM_CHAT_ID   = "your_chat_id"
                                         "currency":  h.get("currency", "EUR"),
                                     }
                                 eu_block["holdings"]     = new_eu
-                                eu_block["last_updated"] = datetime.now().strftime("%Y-%m-%d")
+                                eu_block["last_updated"] = now_berlin().strftime("%Y-%m-%d")
                                 eu_block["source"]       = "gemini_screenshot"
                                 pf["eu_us"]              = eu_block
                                 st.session_state.portfolio = pf
@@ -1716,7 +1724,7 @@ TELEGRAM_CHAT_ID   = "your_chat_id"
                     "avg_price": avg_eu,
                     "currency":  cur_eu,
                 }
-                eu_block["last_updated"] = datetime.now().strftime("%Y-%m-%d")
+                eu_block["last_updated"] = now_berlin().strftime("%Y-%m-%d")
                 pf["eu_us"] = eu_block
                 st.session_state.portfolio = pf
                 save_portfolio(pf)

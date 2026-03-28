@@ -1,0 +1,5 @@
+title: AI Stock Investment Recommender
+description: Real-time BUY/HOLD/SELL signals for EU, US, Indian stocks and crypto — prices in EUR
+theme: minima
+plugins:
+  - jekyll-seo-tag

@@ -12,7 +12,12 @@ import io
 import uuid
 import requests
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import streamlit as st
+
+_BERLIN = ZoneInfo("Europe/Berlin")
+def _now() -> datetime:
+    return datetime.now(_BERLIN)
 
 # ─────────────────────────────────────────────
 # CONSTANTS
@@ -513,7 +518,7 @@ def generate_portfolio_recommendations(
 
             recs.append({
                 "id":             str(uuid.uuid4())[:8],
-                "date":           datetime.now().isoformat(timespec="minutes"),
+                "date":           _now().isoformat(timespec="minutes"),
                 "symbol":         sym,
                 "name":           h.get("name", sym),
                 "market":         market_key,
@@ -556,7 +561,7 @@ def generate_portfolio_recommendations(
 
         recs.append({
             "id":             str(uuid.uuid4())[:8],
-            "date":           datetime.now().isoformat(timespec="minutes"),
+            "date":           _now().isoformat(timespec="minutes"),
             "symbol":         ar["symbol"],
             "name":           ar["name"],
             "market":         _detect_market(ar["symbol"]),
@@ -612,7 +617,7 @@ def apply_recommendation(portfolio: dict, rec: dict,
                 del holdings[sym]
             else:
                 holdings[sym]["qty"] = new_qty
-        block["last_updated"] = datetime.now().strftime("%Y-%m-%d")
+        block["last_updated"] = _now().strftime("%Y-%m-%d")
 
     elif action in ("BUY MORE", "BUY NEW"):
         if sym in holdings:
@@ -629,7 +634,7 @@ def apply_recommendation(portfolio: dict, rec: dict,
                 "qty":       qty_executed,
                 "avg_price": price_executed,
             }
-        block["last_updated"] = datetime.now().strftime("%Y-%m-%d")
+        block["last_updated"] = _now().strftime("%Y-%m-%d")
 
     # Update rec status
     rec["status"]         = "approved"
@@ -662,7 +667,7 @@ def format_portfolio_telegram(
 ) -> str:
     lines = [
         "💼 <b>Portfolio Report — AI Stock Recommender</b>",
-        f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M')} UTC",
+        f"📅 {_now().strftime('%Y-%m-%d %H:%M')} Berlin",
         "",
     ]
 
