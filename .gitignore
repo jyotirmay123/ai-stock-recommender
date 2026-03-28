@@ -12,8 +12,12 @@ venv/
 ENV/
 .env
 
-# Streamlit
-.streamlit/
+# Streamlit — commit config.toml and secrets.toml.example, but NOT secrets.toml
+.streamlit/secrets.toml
+
+# uv
+uv.lock
+.python-version
 
 # Distribution / packaging
 build/

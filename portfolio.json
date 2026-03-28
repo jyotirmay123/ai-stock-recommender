@@ -1,0 +1,165 @@
+{
+  "india": {
+    "currency": "INR",
+    "last_updated": "2026-03-28",
+    "source": "screenshot_manual",
+    "holdings": {
+      "CARBORUNIV.NS": {
+        "name": "Carborundum Universal",
+        "qty": 5,
+        "avg_price": 1330.1
+      },
+      "ESCORTS.NS": {
+        "name": "Escorts Kubota",
+        "qty": 4,
+        "avg_price": 3538.02
+      },
+      "GODREJAGRO.NS": {
+        "name": "Godrej Agrovet",
+        "qty": 7,
+        "avg_price": 706.76
+      },
+      "GRANULES.NS": {
+        "name": "Granules India",
+        "qty": 15,
+        "avg_price": 659.75
+      },
+      "MOM30IETF.NS": {
+        "name": "Nippon India Nifty Momentum 30 ETF",
+        "qty": 173,
+        "avg_price": 34.65
+      },
+      "MOMENTUM.NS": {
+        "name": "Nifty200 Momentum 30 ETF",
+        "qty": 432,
+        "avg_price": 33.02
+      },
+      "NIFTYBEES.NS": {
+        "name": "Nippon India ETF Nifty BeES",
+        "qty": 57,
+        "avg_price": 281.33
+      },
+      "SCHAEFFLER.NS": {
+        "name": "Schaeffler India",
+        "qty": 5,
+        "avg_price": 4387.5
+      },
+      "TCS.NS": {
+        "name": "Tata Consultancy Services",
+        "qty": 15,
+        "avg_price": 3352.65
+      },
+      "TTKPRESTIG.NS": {
+        "name": "TTK Prestige",
+        "qty": 8,
+        "avg_price": 879.5
+      },
+      "VINATIORGA.NS": {
+        "name": "Vinati Organics",
+        "qty": 3,
+        "avg_price": 1729.58
+      }
+    }
+  },
+  "eu_us": {
+    "currency": "EUR",
+    "last_updated": "2026-03-28",
+    "source": "gemini_screenshot",
+    "holdings": {
+      "PUM.DE": {
+        "name": "Puma SE",
+        "qty": 0.066667,
+        "avg_price": 15000.0,
+        "currency": "EUR"
+      },
+      "MSFT": {
+        "name": "Microsoft Corporation",
+        "qty": 0.011547,
+        "avg_price": 39400.0,
+        "currency": "EUR"
+      },
+      "SAP.DE": {
+        "name": "SAP SE",
+        "qty": 0.020576,
+        "avg_price": 17600.0,
+        "currency": "EUR"
+      },
+      "TSLA": {
+        "name": "Tesla Inc",
+        "qty": 0.013986,
+        "avg_price": 20000.0,
+        "currency": "EUR"
+      },
+      "AIR.PA": {
+        "name": "Airbus SE",
+        "qty": 0.012345,
+        "avg_price": 20800.0,
+        "currency": "EUR"
+      },
+      "NVDA": {
+        "name": "NVIDIA Corporation",
+        "qty": 0.006993,
+        "avg_price": 47600.0,
+        "currency": "EUR"
+      },
+      "AAPL": {
+        "name": "Apple Inc",
+        "qty": 0.010344,
+        "avg_price": 20000.0,
+        "currency": "EUR"
+      },
+      "RHM.DE": {
+        "name": "Rheinmetall AG",
+        "qty": 0.010204,
+        "avg_price": 20200.0,
+        "currency": "EUR"
+      },
+      "AMZN": {
+        "name": "Amazon.com Inc",
+        "qty": 0.010204,
+        "avg_price": 20050.0,
+        "currency": "EUR"
+      },
+      "GOOGL": {
+        "name": "Alphabet Inc",
+        "qty": 0.010101,
+        "avg_price": 20200.0,
+        "currency": "EUR"
+      },
+      "META": {
+        "name": "Meta Platforms Inc",
+        "qty": 0.010101,
+        "avg_price": 20200.0,
+        "currency": "EUR"
+      }
+    }
+  },
+  "settings": {
+    "monthly_budget_eur": 625,
+    "monthly_budget_inr": null
+  },
+  "recommendations_log": [
+    {
+      "id": "616d83f3",
+      "date": "2026-03-28T15:25",
+      "symbol": "ASML.AS",
+      "name": "ASML Holding N.V.",
+      "market": "eu_us",
+      "action": "SELL",
+      "reason": "Stop-loss: down -93.7% \u00b7 Score -3",
+      "urgency": "HIGH",
+      "score": -3,
+      "rsi": 49.8054554795849,
+      "price_eur": 1146.4000244140625,
+      "pl_pct": -93.70109876695571,
+      "qty_held": 0.003472,
+      "qty_suggested": 0.003472,
+      "amount_eur": 3.98,
+      "status": "approved",
+      "qty_executed": 0.01,
+      "price_executed": 1146.4000244140625,
+      "note": "",
+      "is_new_position": false
+    }
+  ]
+}

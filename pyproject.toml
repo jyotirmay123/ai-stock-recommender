@@ -1,0 +1,24 @@
+[project]
+name            = "ai-stock-recommender"
+version         = "2.0.0"
+description     = "Real-time AI stock investment recommender with BUY/HOLD/SELL signals in EUR"
+requires-python = ">=3.11"
+dependencies    = [
+    "streamlit>=1.32.0",
+    "yfinance>=0.2.36",
+    "pandas>=2.0.0",
+    "numpy>=1.26.0",
+    "plotly>=5.18.0",
+    "requests>=2.31.0",
+]
+
+
+[dependency-groups]
+dev = []
+
+[tool.hatch.build.targets.wheel]
+include = ["stock_analyser.py"]
+
+[build-system]
+requires      = ["hatchling"]
+build-backend = "hatchling.build"
