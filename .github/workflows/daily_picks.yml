@@ -7,7 +7,7 @@ name: Daily Stock Picks → Telegram
 # ─────────────────────────────────────────────────────────────────
 on:
   schedule:
-    - cron: "0 8 * * 1-5"   # Mon–Fri 08:00 UTC
+    - cron: "0 6 * * 1-5"   # Mon–Fri 06:00 UTC
   workflow_dispatch:          # manual run button in GitHub UI
 
 jobs:
