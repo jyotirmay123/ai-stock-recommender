@@ -1344,8 +1344,8 @@ TELEGRAM_CHAT_ID   = "your_chat_id"
                 df_table = pd.DataFrame(table_data)
                 st.dataframe(
                     df_table.style
-                        .applymap(color_signal, subset=["Signal"])
-                        .applymap(color_change, subset=["1M Change", "6M Change"]),
+                        .map(color_signal, subset=["Signal"])
+                        .map(color_change, subset=["1M Change", "6M Change"]),
                     use_container_width=True, hide_index=True,
                 )
                 st.divider()
@@ -1631,7 +1631,7 @@ TELEGRAM_CHAT_ID   = "your_chat_id"
                     return ""
 
             st.dataframe(
-                df_india.style.applymap(_color_pl, subset=["P&L", "P&L %"]),
+                df_india.style.map(_color_pl, subset=["P&L", "P&L %"]),
                 use_container_width=True, hide_index=True,
             )
 
@@ -1801,7 +1801,7 @@ TELEGRAM_CHAT_ID   = "your_chat_id"
 
             df_eu = pd.DataFrame(eu_tbl)
             st.dataframe(
-                df_eu.style.applymap(_color_pl, subset=["P&L", "P&L %"]),
+                df_eu.style.map(_color_pl, subset=["P&L", "P&L %"]),
                 use_container_width=True, hide_index=True,
             )
 
@@ -2144,8 +2144,8 @@ TELEGRAM_CHAT_ID   = "your_chat_id"
 
             st.dataframe(
                 df_log.style
-                    .applymap(_color_action,  subset=["Action"])
-                    .applymap(_color_status,  subset=["Status"]),
+                    .map(_color_action,  subset=["Action"])
+                    .map(_color_status,  subset=["Status"]),
                 use_container_width=True, hide_index=True,
             )
 
