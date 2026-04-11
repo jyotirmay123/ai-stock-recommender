@@ -1,9 +1,9 @@
 ---
-title: AI Stock Investment Recommender
-layout: default
+title: Home
+nav_order: 1
+description: "Real-time BUY/HOLD/SELL signals for EU, US, Indian stocks and crypto — prices in EUR"
+permalink: /
 ---
-
-# AI Stock Investment Recommender
 
 [![Daily Stock Picks → Telegram](https://github.com/jyotirmay123/ai-stock-recommender/actions/workflows/daily_picks.yml/badge.svg)](https://github.com/jyotirmay123/ai-stock-recommender/actions/workflows/daily_picks.yml)
 
@@ -30,7 +30,7 @@ Open `http://localhost:8501` in your browser.
 ## Features
 
 | Feature | Detail |
-|---|---|
+| --- | --- |
 | Global Coverage | EU, US S&P 500, Indian NSE, Bitcoin + search any ticker worldwide |
 | 6 Technical Indicators | RSI, MACD crossover, SMA 20/50/200, Bollinger Bands, Volume confirmation |
 | Composite Score | Each indicator contributes points → single −10 to +10 score |
@@ -53,7 +53,7 @@ Open `http://localhost:8501` in your browser.
 Each of six indicators contributes points to a composite score (max ±10):
 
 | Indicator | Points | Bullish Condition | Bearish Condition |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **RSI** | ±2/3 | RSI < buy threshold (oversold) | RSI > sell threshold (overbought) |
 | **MACD** | ±1 or ±2 | Bullish crossover or above signal | Bearish crossover or below signal |
 | **SMA 20** | ±1 | Price above 20-day moving average | Price below 20-day moving average |
@@ -63,7 +63,7 @@ Each of six indicators contributes points to a composite score (max ±10):
 
 Recommendation thresholds:
 
-```
+```text
 score ≥ +3  →  BUY
 score ≤ −3  →  SELL
 otherwise   →  HOLD
@@ -74,7 +74,7 @@ otherwise   →  HOLD
 ## Risk Profiles
 
 | Profile | RSI Buy Below | RSI Sell Above | Min Score (BUY) |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Conservative | 35 | 65 | 4 |
 | Balanced *(default)* | 40 | 60 | 3 |
 | Aggressive | 45 | 55 | 2 |
@@ -86,6 +86,7 @@ otherwise   →  HOLD
 Every ticker that appears in the daily top-5 BUY picks is automatically saved to `portfolio.json` under `tracked_buys`. The **🎯 Tracked Buy Recommendations — Live Signals** section in the Market Watchlist tab renders a colour-coded card for each tracked ticker showing its current signal, score, RSI, and P&L since recommendation.
 
 **Signal colours:**
+
 - 🟢 Green border — currently BUY
 - 🟠 Orange border — currently HOLD
 - 🔴 Red border — currently SELL
@@ -135,7 +136,7 @@ You can also trigger it manually from the **Actions** tab.
 
 ## Architecture
 
-```
+```text
 stock_analyser.py      — Streamlit app (entry point, all UI, indicators, scoring, tracked buys UI)
 portfolio_manager.py   — Portfolio state, AI OCR, recommendations, Telegram formatting
 daily_picks.py         — Standalone Telegram digest (BUY picks + sell alerts, tracked_buys persistence)
@@ -156,7 +157,7 @@ docs/
 ## Technical Stack
 
 | Library | Purpose |
-|---|---|
+| --- | --- |
 | `streamlit` ≥1.32 | Web dashboard & UI |
 | `yfinance` ≥0.2 | Live market data (Yahoo Finance) |
 | `pandas` ≥2.1 | Data manipulation (`Styler.map()` — not deprecated `applymap`) |

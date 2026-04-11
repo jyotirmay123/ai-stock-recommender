@@ -1,5 +1,33 @@
 title: AI Stock Investment Recommender
 description: Real-time BUY/HOLD/SELL signals for EU, US, Indian stocks and crypto — prices in EUR
-theme: minima
+remote_theme: just-the-docs/just-the-docs@v0.12.0
+
+color_scheme: dark
+
 plugins:
+  - jekyll-remote-theme
   - jekyll-seo-tag
+
+# ── Just the Docs settings ───────────────────────────────────────
+search_enabled: true
+search:
+  heading_level: 2
+  previews: 3
+  preview_words_before: 5
+  preview_words_after: 10
+
+heading_anchors: true
+
+footer_content: "Data from <a href='https://finance.yahoo.com'>Yahoo Finance</a> &nbsp;·&nbsp; Built with <a href='https://streamlit.io'>Streamlit</a>"
+
+# Callout colours aligned with signal colours
+callouts:
+  buy:
+    title: BUY
+    color: green
+  sell:
+    title: SELL
+    color: red
+  hold:
+    title: HOLD
+    color: yellow
