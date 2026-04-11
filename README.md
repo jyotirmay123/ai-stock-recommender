@@ -1,5 +1,7 @@
 # 📈 AI Stock Investment Recommender
 
+[![Daily Stock Picks → Telegram](https://github.com/jyotirmay123/ai-stock-recommender/actions/workflows/daily_picks.yml/badge.svg)](https://github.com/jyotirmay123/ai-stock-recommender/actions/workflows/daily_picks.yml)
+
 > Real-time technical analysis · BUY / HOLD / SELL signals · Prices in **€ (EUR)**
 
 A fully interactive, browser-based stock screener and investment analyser built with
