@@ -63,7 +63,10 @@ There are four Python files:
 - Currency conversion helpers (`get_eur_rate`, `get_inr_eur_rate`, `get_mult`) — all prices are normalised to EUR in the UI
 - `fetch_stock_data` — `yfinance` download, cached 5 min via `@st.cache_data`
 - Technical indicator calculations (RSI, MACD, SMA 20/50/200, Bollinger Bands) and `compute_recommendation` which returns a score (−10 to +10) and BUY/HOLD/SELL signal
+- Advanced indicator functions (`compute_atr`, `compute_stochastic`, `find_support_resistance`, `compute_fibonacci_levels`, `compute_pivot_points`) — computed in `add_indicators` alongside existing signals
 - News sentiment (`fetch_news`, `news_sentiment`) — simple keyword scoring on Yahoo Finance headlines
+- `build_chart()` accepts `show_sr`, `show_fib`, `show_pivots`, `show_stoch` toggles (driven by checkboxes above the chart in `render_deep_dive`); adds Support/Resistance dashed lines, Fibonacci retracements, Pivot Points, and an optional 4th Stochastic panel
+- `render_deep_dive()` also has an "📐 Advanced Metrics" expander showing ATR, Stochastic %K/%D, and Pivot Point levels
 - `get_ai_signal()` — `@st.cache_data(ttl=3600)` wrapper around `ai_analyst.ai_enhanced_signal`; shown in the deep-dive signal panel as an "🤖 AI Analysis" card with signal, confidence %, and reasoning
 - `format_telegram_picks` — formats watchlist BUY picks + tracked-buy SELL alerts for Telegram
 - UI rendering: sidebar controls, watchlist tabs (including "Tracked Buy Recommendations" section), ticker search, chart panel (3-panel Plotly: candlestick+overlays, RSI, MACD), news list, portfolio tab

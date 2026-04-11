@@ -42,6 +42,7 @@ Open `http://localhost:8501` in your browser.
 | Portfolio Tracker | Track EU/US and Indian holdings with live P&L in EUR |
 | AI Screenshot OCR | Upload a brokerage screenshot to auto-import holdings (Anthropic/Gemini/Groq) |
 | AI-Enhanced Signals | Small LLM (Groq llama-3.1-8b or Anthropic claude-haiku) validates each BUY/SELL with confidence score + reasoning — shown in deep-dive panel and Telegram digest |
+| Advanced Chart Analysis | Per-ticker overlay toggles: Support/Resistance levels, Fibonacci retracements, Pivot Points (PP/R1/R2/S1/S2), optional Stochastic panel; Advanced Metrics expander shows ATR and Stochastic values |
 | Tracked Buy Recommendations | Previously recommended BUY tickers tracked live with current signal cards |
 | Sell Alerts | Tracked tickers showing SELL signal appear highlighted in the UI and Telegram |
 | Auto-Cleanup | Tracked tickers are automatically removed after 3 consecutive SELL days |
