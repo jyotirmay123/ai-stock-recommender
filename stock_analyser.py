@@ -973,10 +973,27 @@ def build_chart(
 # DEEP-DIVE RENDERER
 # ─────────────────────────────────────────────
 def render_deep_dive(r: dict, key_prefix: str = ""):
-    """Render signal panel + fixed chart + news + AI insight for one result."""
-    # Fetch news early so headlines are available for AI analysis
-    news = fetch_news(r["symbol"])
+    """Render signal panel + chart + full-width AI card + advanced metrics + news."""
+    # Fetch news and compute AI signal before entering any column context
+    news      = fetch_news(r["symbol"])
     headlines = [a["title"] for a in news if a.get("title")]
+
+    ind_ctx = build_indicator_context(r["signals"])
+    ai = get_ai_signal(
+        symbol          = r["symbol"],
+        name            = r["name"],
+        rule_score      = r["score"],
+        rule_signal     = r["recommendation"],
+        rsi_val         = float(r["rsi"]) if pd.notna(r["rsi"]) else None,
+        macd_status     = ind_ctx["macd_status"],
+        sma20_pos       = ind_ctx["sma20_pos"],
+        sma50_pos       = ind_ctx["sma50_pos"],
+        bollinger_pos   = ind_ctx["bollinger_pos"],
+        volume_status   = ind_ctx["volume_status"],
+        pct_chg_1m      = float(r["pct_chg_1m"]) if pd.notna(r["pct_chg_1m"]) else None,
+        pct_chg_6m      = float(r["pct_chg_6m"]) if pd.notna(r["pct_chg_6m"]) else None,
+        headlines_tuple = tuple(headlines),
+    )
 
     sig_col, chart_col = st.columns([1, 3])
 
@@ -1013,53 +1030,6 @@ def render_deep_dive(r: dict, key_prefix: str = ""):
         st.metric("52W High",  f"€{r['high52']:,.2f}",       help=TOOLTIPS["52W High"])
         st.metric("52W Low",   f"€{r['low52']:,.2f}",        help=TOOLTIPS["52W Low"])
 
-        # ── AI-Enhanced Analysis ──────────────
-        ind_ctx = build_indicator_context(r["signals"])
-        rsi_val = float(r["rsi"]) if pd.notna(r["rsi"]) else None
-        p1m     = float(r["pct_chg_1m"]) if pd.notna(r["pct_chg_1m"]) else None
-        p6m     = float(r["pct_chg_6m"]) if pd.notna(r["pct_chg_6m"]) else None
-
-        ai = get_ai_signal(
-            symbol        = r["symbol"],
-            name          = r["name"],
-            rule_score    = r["score"],
-            rule_signal   = r["recommendation"],
-            rsi_val       = rsi_val,
-            macd_status   = ind_ctx["macd_status"],
-            sma20_pos     = ind_ctx["sma20_pos"],
-            sma50_pos     = ind_ctx["sma50_pos"],
-            bollinger_pos = ind_ctx["bollinger_pos"],
-            volume_status = ind_ctx["volume_status"],
-            pct_chg_1m    = p1m,
-            pct_chg_6m    = p6m,
-            headlines_tuple = tuple(headlines),
-        )
-        if ai:
-            sig_color  = {"BUY": "#00C853", "SELL": "#FF5252", "HOLD": "#FFB74D"}.get(
-                ai["signal"], "#aaa"
-            )
-            sig_emoji  = {"BUY": "🟢", "SELL": "🔴", "HOLD": "🟡"}.get(ai["signal"], "")
-            conf_bar   = int(ai["confidence"])
-            conf_color = (
-                "#00C853" if conf_bar >= 70
-                else ("#FFB74D" if conf_bar >= 45 else "#FF5252")
-            )
-            st.markdown(
-                f"<div style='margin-top:14px;background:#0D1B2A;border:1px solid #1E88E5;"
-                f"border-radius:8px;padding:12px;'>"
-                f"<p style='font-size:11px;color:#90CAF9;font-weight:600;margin:0 0 6px'>🤖 AI Analysis</p>"
-                f"<div style='font-size:15px;font-weight:700;color:{sig_color}'>"
-                f"  {sig_emoji} {ai['signal']}"
-                f"  <span style='font-size:11px;color:{conf_color};margin-left:6px'>"
-                f"  {conf_bar}% confidence</span>"
-                f"</div>"
-                f"<p style='font-size:11px;color:#ccc;margin:8px 0 4px;line-height:1.5'>"
-                f"{ai['reasoning']}</p>"
-                f"<p style='font-size:9px;color:#555;margin:0'>via {ai.get('provider','AI')}</p>"
-                f"</div>",
-                unsafe_allow_html=True,
-            )
-
     with chart_col:
         sk = r["symbol"]
         st.caption("Chart overlays")
@@ -1075,6 +1045,41 @@ def render_deep_dive(r: dict, key_prefix: str = ""):
         )
         st.plotly_chart(fig, use_container_width=True,
                         key=f"chart_{key_prefix}{sk}")
+
+    # ── AI-Enhanced Analysis (full-width, below chart) ───────────
+    if ai:
+        sig_color  = {"BUY": "#00C853", "SELL": "#FF5252", "HOLD": "#FFB74D"}.get(ai["signal"], "#aaa")
+        sig_emoji  = {"BUY": "🟢", "SELL": "🔴", "HOLD": "🟡"}.get(ai["signal"], "")
+        conf_bar   = int(ai["confidence"])
+        conf_color = "#00C853" if conf_bar >= 70 else ("#FFB74D" if conf_bar >= 45 else "#FF5252")
+        left, right = st.columns([1, 2])
+        with left:
+            st.markdown(
+                f"<div style='background:#0D1B2A;border:1px solid #1E88E5;border-radius:8px;"
+                f"padding:16px;height:100%'>"
+                f"<p style='font-size:12px;color:#90CAF9;font-weight:600;margin:0 0 8px'>🤖 AI Signal</p>"
+                f"<div style='font-size:26px;font-weight:800;color:{sig_color};margin-bottom:10px'>"
+                f"  {sig_emoji} {ai['signal']}</div>"
+                f"<p style='font-size:12px;color:#aaa;margin:0 0 4px'>Confidence</p>"
+                f"<div style='background:#1E1E2E;border-radius:4px;height:10px;overflow:hidden'>"
+                f"  <div style='width:{conf_bar}%;background:{conf_color};height:100%'></div></div>"
+                f"<p style='font-size:12px;color:{conf_color};margin:4px 0 0;font-weight:600'>"
+                f"  {conf_bar}%</p>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        with right:
+            st.markdown(
+                f"<div style='background:#0D1B2A;border:1px solid #1E88E5;border-radius:8px;"
+                f"padding:16px;height:100%'>"
+                f"<p style='font-size:12px;color:#90CAF9;font-weight:600;margin:0 0 8px'>Reasoning</p>"
+                f"<p style='font-size:14px;color:#ddd;line-height:1.6;margin:0 0 10px'>"
+                f"{ai['reasoning']}</p>"
+                f"<p style='font-size:10px;color:#555;margin:0'>via {ai.get('provider', 'AI')}</p>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        st.markdown("<div style='margin-bottom:8px'></div>", unsafe_allow_html=True)
 
     # ── Advanced Metrics (full-width, below both columns) ────────
     df_r    = r["df"]
