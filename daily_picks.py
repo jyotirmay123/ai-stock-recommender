@@ -24,6 +24,8 @@ import pandas as pd
 import numpy as np
 import requests
 
+from ai_analyst import ai_enhanced_signal
+
 warnings.filterwarnings("ignore")
 
 BERLIN = ZoneInfo("Europe/Berlin")
@@ -214,6 +216,26 @@ def _score(sym: str, df: pd.DataFrame) -> dict:
     }
 
 # ─────────────────────────────────────────────
+# NEWS FETCH  (lightweight — no Streamlit cache)
+# ─────────────────────────────────────────────
+def _fetch_headlines(sym: str) -> list[str]:
+    """Return up to 5 recent news headlines for a ticker."""
+    try:
+        raw = yf.Ticker(sym).news
+        if not raw:
+            return []
+        titles = []
+        for item in raw[:5]:
+            content = item.get("content", item)
+            title   = content.get("title") or item.get("title", "")
+            if title:
+                titles.append(title)
+        return titles
+    except Exception:
+        return []
+
+
+# ─────────────────────────────────────────────
 # TELEGRAM
 # ─────────────────────────────────────────────
 def _send_telegram(text: str) -> bool:
@@ -304,6 +326,33 @@ def main():
                     f"  {star} <code>{r['symbol']}</code> {r['name']}"
                     f"  €{r['eur']:,.2f}  Score: {r['score']:+d}  RSI: {rsi_str}"
                 )
+                # AI reasoning for top-3 per market (avoids excess API calls)
+                try:
+                    if top5.index(r) < 3:
+                        headlines = _fetch_headlines(r["symbol"])
+                        ai = ai_enhanced_signal(
+                            symbol        = r["symbol"],
+                            name          = r["name"],
+                            rule_score    = r["score"],
+                            rule_signal   = r["rec"],
+                            rsi           = float(r["rsi"]) if not pd.isna(r["rsi"]) else None,
+                            macd_status   = "MACD above signal" if r["score"] > 0 else "MACD below signal",
+                            sma20_pos     = "Above SMA20" if r["score"] > 0 else "Below SMA20",
+                            sma50_pos     = "Above SMA50" if r["score"] > 1 else "Below SMA50",
+                            bollinger_pos = "Inside bands",
+                            volume_status = "Normal volume",
+                            pct_chg_1m    = None,
+                            pct_chg_6m    = None,
+                            news_headlines = headlines,
+                        )
+                        if ai:
+                            sig_emoji = {"BUY": "🟢", "HOLD": "🟡", "SELL": "🔴"}.get(ai["signal"], "")
+                            lines.append(
+                                f"    <i>🤖 AI ({ai.get('provider','AI')}): {sig_emoji} {ai['signal']} "
+                                f"({ai['confidence']}%) — {ai['reasoning']}</i>"
+                            )
+                except Exception:
+                    pass  # AI enrichment is best-effort; never block Telegram send
         else:
             lines.append("  — No BUY signals today")
         lines.append("")

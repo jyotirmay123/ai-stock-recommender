@@ -55,7 +55,8 @@ logs/
 .coverage
 htmlcov/
 
-# Data / cache (don't commit downloaded market data)
+# Data / cache (don't commit downloaded market data or runtime AI cache)
+ai_analysis_cache.json
 *.csv
 *.parquet
 *.pkl
