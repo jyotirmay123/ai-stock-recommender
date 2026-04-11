@@ -876,6 +876,61 @@ def format_telegram_picks(results_by_market: dict) -> str:
         else:
             lines.append("  • No BUY signals at this time")
         lines.append("")
+
+    # ── Tracked buys that are now showing SELL signals ────────────────────
+    try:
+        tracked = load_portfolio().get("tracked_buys", {})
+    except Exception:
+        tracked = {}
+
+    # Flatten all results into a quick lookup by symbol
+    all_results: dict = {}
+    for mkt_results in results_by_market.values():
+        for r in mkt_results:
+            all_results[r["symbol"]] = r
+
+    sell_alerts: dict = {}
+    for sym, info in tracked.items():
+        if sym not in all_results:
+            continue
+        r = all_results[sym]
+        if r["recommendation"] != "SELL":
+            continue
+        market = info.get("market", "Other")
+        sell_alerts.setdefault(market, [])
+        price_then = info.get("price_at_recommendation") or 0
+        price_now  = r["price_eur"]
+        pct_str    = f"{(price_now - price_then) / price_then * 100:+.1f}%" if price_then else "—"
+        rsi_str    = f"{r['rsi']:.0f}" if pd.notna(r["rsi"]) else "—"
+        cons_days  = info.get("consecutive_sell_days", 0)
+        sell_alerts[market].append({
+            "symbol":    sym,
+            "name":      info["name"],
+            "score":     r["score"],
+            "rsi":       rsi_str,
+            "eur":       price_now,
+            "pct":       pct_str,
+            "first_rec": info.get("first_recommended", "?"),
+            "cons_days": cons_days,
+        })
+
+    if sell_alerts:
+        lines.append("🔔 <b>Tracked Buys — Now Showing SELL Signal</b>")
+        for market in results_by_market:
+            alerts = sell_alerts.get(market, [])
+            if not alerts:
+                continue
+            lines.append(f"<b>{market}</b>")
+            for a in alerts:
+                day_note = f"  (sell day {a['cons_days']})" if a["cons_days"] else ""
+                lines.append(
+                    f"  🔴 <code>{a['symbol']}</code> {a['name']}"
+                    f" — €{a['eur']:,.2f}"
+                    f" | Score: {a['score']:+d} | RSI: {a['rsi']}"
+                    f" | Since rec: {a['pct']}{day_note}"
+                )
+            lines.append("")
+
     lines.append("⚠️ <i>For informational purposes only. Not financial advice.</i>")
     return "\n".join(lines)
 
@@ -1146,6 +1201,112 @@ TELEGRAM_CHAT_ID   = "your_chat_id"
                             )
 
                 st.divider()
+
+                # ── Tracked Buys — Live Signal Status ───────
+                tracked_pf   = load_portfolio()
+                tracked_buys = tracked_pf.get("tracked_buys", {})
+
+                if tracked_buys:
+                    st.subheader("🎯 Tracked Buy Recommendations — Live Signals")
+                    st.caption(
+                        "Tickers previously recommended as top BUY picks. "
+                        "Auto-removed after 3 consecutive SELL days."
+                    )
+
+                    # Quick lookup from already-fetched results
+                    results_by_sym = {r["symbol"]: r for r in results}
+
+                    # Fetch any tracked ticker whose market wasn't selected
+                    for sym, info in tracked_buys.items():
+                        if sym not in results_by_sym:
+                            df_t = fetch_stock_data(sym, period)
+                            if df_t is not None and len(df_t) >= 30:
+                                df_t = add_indicators(df_t)
+                                results_by_sym[sym] = build_result(
+                                    sym, info["name"], info.get("market", "Other"),
+                                    df_t, eur_rate, inr_eur_rate, risk,
+                                )
+
+                    # Auto-remove tickers with 3+ consecutive SELL days
+                    to_drop = [
+                        sym for sym, info in tracked_buys.items()
+                        if info.get("consecutive_sell_days", 0) >= 3
+                    ]
+                    if to_drop:
+                        for sym in to_drop:
+                            del tracked_pf["tracked_buys"][sym]
+                            del tracked_buys[sym]
+                        save_portfolio(tracked_pf)
+                        st.session_state.portfolio = tracked_pf
+                        st.toast(
+                            f"Removed {', '.join(to_drop)} after 3 consecutive SELL days.",
+                            icon="🗑️",
+                        )
+
+                    if tracked_buys:
+                        num_tracked = len(tracked_buys)
+                        t_cols = st.columns(min(num_tracked, 4))
+                        for idx, (sym, info) in enumerate(tracked_buys.items()):
+                            r = results_by_sym.get(sym)
+                            with t_cols[idx % min(num_tracked, 4)]:
+                                if r:
+                                    rec = r["recommendation"]
+                                    if rec == "BUY":
+                                        border_col, bg_col, rec_col = "#1B5E20", "#091A0F", "#00C853"
+                                    elif rec == "SELL":
+                                        border_col, bg_col, rec_col = "#B71C1C", "#1A0909", "#FF5252"
+                                    else:
+                                        border_col, bg_col, rec_col = "#FF9800", "#191200", "#FFB74D"
+                                    rec_emoji  = {"BUY": "🟢", "HOLD": "🟡", "SELL": "🔴"}.get(rec, "")
+                                    rsi_str    = f"{r['rsi']:.0f}" if pd.notna(r["rsi"]) else "—"
+                                    price_then = info.get("price_at_recommendation") or 0
+                                    price_now  = r["price_eur"]
+                                    if price_then:
+                                        pct_val = (price_now - price_then) / price_then * 100
+                                        pct_str = f"{pct_val:+.1f}%"
+                                        pct_col = "#00C853" if pct_val >= 0 else "#FF5252"
+                                    else:
+                                        pct_str = "no entry price"
+                                        pct_col = "#666"
+                                    cons_days  = info.get("consecutive_sell_days", 0)
+                                    sell_note  = (
+                                        f"<br><span style='color:#FF5252;font-size:10px'>⚠️ SELL day {cons_days}/3 — auto-removes at 3</span>"
+                                        if cons_days > 0 else ""
+                                    )
+                                    first_rec  = info.get("first_recommended", "?")
+                                    card = (
+                                        f"<div style='background:{bg_col};border:1px solid {border_col};"
+                                        f"border-radius:8px;padding:12px;margin-bottom:8px;min-height:148px;'>"
+                                        f"<div style='font-size:10px;color:#777'>{sym} &nbsp;·&nbsp; since {first_rec}</div>"
+                                        f"<div style='font-size:14px;font-weight:700;color:white;margin-top:3px'>{info['name']}</div>"
+                                        f"<div style='font-size:22px;font-weight:700;color:white;margin:4px 0'>€{price_now:,.2f}</div>"
+                                        f"<div style='display:inline-block;background:{border_col};color:white;"
+                                        f"font-size:12px;font-weight:700;padding:2px 8px;border-radius:4px;margin-bottom:6px'>"
+                                        f"{rec_emoji} {rec}</div>"
+                                        f"<div style='font-size:11px;color:#aaa;border-top:1px solid {border_col};padding-top:6px;margin-top:2px'>"
+                                        f"Score: <b style='color:{rec_col}'>{r['score']:+d}</b>"
+                                        f" &nbsp;·&nbsp; RSI: {rsi_str}"
+                                        f" &nbsp;·&nbsp; P/L: <span style='color:{pct_col}'>{pct_str}</span>"
+                                        f"{sell_note}</div></div>"
+                                    )
+                                    st.markdown(card, unsafe_allow_html=True)
+                                else:
+                                    card = (
+                                        f"<div style='background:#111;border:1px solid #333;"
+                                        f"border-radius:8px;padding:12px;margin-bottom:8px;min-height:148px;'>"
+                                        f"<div style='font-size:10px;color:#777'>{sym}</div>"
+                                        f"<div style='font-size:14px;font-weight:700;color:white;margin-top:3px'>{info['name']}</div>"
+                                        f"<div style='font-size:12px;color:#555;margin-top:8px'>Data unavailable</div>"
+                                        f"</div>"
+                                    )
+                                    st.markdown(card, unsafe_allow_html=True)
+                    else:
+                        st.info(
+                            "All tracked picks have been removed after 3 consecutive SELL days. "
+                            "New buys will appear here when recommended."
+                        )
+
+                    st.divider()
 
                 # ── Full summary table ───────
                 st.subheader("📋 Full Analysis Summary")

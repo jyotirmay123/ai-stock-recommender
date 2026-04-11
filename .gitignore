@@ -62,3 +62,4 @@ htmlcov/
 *.h5
 cache/
 data/
+*.xlsx

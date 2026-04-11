@@ -5,6 +5,7 @@ Runs every weekday at 9AM Berlin time via Cowork scheduler.
 No Streamlit dependency — reads secrets from .streamlit/secrets.toml or env vars.
 """
 
+import json
 import os
 import sys
 try:
@@ -27,6 +28,7 @@ warnings.filterwarnings("ignore")
 
 BERLIN = ZoneInfo("Europe/Berlin")
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+PORTFOLIO_PATH = os.path.join(PROJECT_DIR, "portfolio.json")
 
 # ─────────────────────────────────────────────
 # SECRETS
@@ -45,6 +47,33 @@ _SECRETS = _load_secrets()
 
 def secret(key: str) -> str:
     return _SECRETS.get(key, "") or os.environ.get(key, "")
+
+# ─────────────────────────────────────────────
+# TRACKED BUYS PERSISTENCE
+# ─────────────────────────────────────────────
+def _load_tracked_buys() -> dict:
+    """Return tracked_buys dict from portfolio.json, or {} if missing/unreadable."""
+    try:
+        with open(PORTFOLIO_PATH, "r") as f:
+            return json.load(f).get("tracked_buys", {})
+    except Exception:
+        return {}
+
+
+def _save_tracked_buys(tracked: dict) -> None:
+    """Persist tracked_buys back into portfolio.json without touching other keys."""
+    try:
+        try:
+            with open(PORTFOLIO_PATH, "r") as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+        data["tracked_buys"] = tracked
+        with open(PORTFOLIO_PATH, "w") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print(f"⚠️  Could not save tracked buys: {e}")
+
 
 # ─────────────────────────────────────────────
 # STOCK UNIVERSE  (mirrors stock_analyser.py)
@@ -208,11 +237,17 @@ def _send_telegram(text: str) -> bool:
 # MAIN
 # ─────────────────────────────────────────────
 def main():
-    now     = datetime.now(BERLIN)
-    eur_r   = _eur_rate()
-    inr_r   = _inr_eur_rate()
+    now   = datetime.now(BERLIN)
+    eur_r = _eur_rate()
+    inr_r = _inr_eur_rate()
+    today = now.strftime("%Y-%m-%d")
 
     print(f"[{now.strftime('%Y-%m-%d %H:%M %Z')}] Running daily BUY picks analysis…")
+
+    tracked = _load_tracked_buys()
+
+    # symbol → full result dict (populated for every ticker, not just BUYs)
+    all_results: dict = {}
 
     lines = [
         "📈 <b>Daily Top BUY Picks — AI Stock Recommender</b>",
@@ -232,11 +267,27 @@ def main():
                 df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
                 df  = _indicators(df)
                 res = _score(sym, df)
+                mult       = _mult(sym, eur_r, inr_r)
+                res["eur"] = res["price"] * mult
+                res["name"]   = name
+                res["market"] = market
+                all_results[sym] = res
+
                 if res["rec"] == "BUY":
-                    mult        = _mult(sym, eur_r, inr_r)
-                    res["eur"]  = res["price"] * mult
-                    res["name"] = name
                     buys.append(res)
+                    # Track: first time we recommend a ticker, record it; subsequent runs update last date
+                    if sym not in tracked:
+                        tracked[sym] = {
+                            "name":  name,
+                            "market": market,
+                            "first_recommended": today,
+                            "last_recommended":  today,
+                            "price_at_recommendation": res["eur"],
+                            "consecutive_sell_days": 0,
+                        }
+                    else:
+                        tracked[sym]["last_recommended"] = today
+                        tracked[sym]["consecutive_sell_days"] = 0
             except Exception as e:
                 print(f"  skip {sym}: {e}")
 
@@ -256,6 +307,61 @@ def main():
         else:
             lines.append("  — No BUY signals today")
         lines.append("")
+
+    # ── Sell alerts for previously recommended tickers ──────────────────────
+    sell_alerts: dict = {}  # market label → list of alert dicts
+    to_remove: list = []
+
+    for sym, info in tracked.items():
+        if sym not in all_results:
+            # Not in STOCKS universe this run — leave consecutive count as-is
+            continue
+        res = all_results[sym]
+        if res["rec"] == "SELL":
+            info["consecutive_sell_days"] = info.get("consecutive_sell_days", 0) + 1
+            market = info.get("market", "Other")
+            sell_alerts.setdefault(market, [])
+            price_then = info.get("price_at_recommendation") or 0
+            price_now  = res["eur"]
+            pct_str    = f"{(price_now - price_then) / price_then * 100:+.1f}%" if price_then else "—"
+            rsi_str    = f"{res['rsi']:.0f}" if not pd.isna(res["rsi"]) else "—"
+            cons_days  = info["consecutive_sell_days"]
+            sell_alerts[market].append({
+                "symbol":    sym,
+                "name":      info["name"],
+                "score":     res["score"],
+                "rsi":       rsi_str,
+                "eur":       price_now,
+                "pct":       pct_str,
+                "first_rec": info.get("first_recommended", "?"),
+                "cons_days": cons_days,
+            })
+            if cons_days >= 3:
+                to_remove.append(sym)
+        else:
+            info["consecutive_sell_days"] = 0
+
+    for sym in to_remove:
+        print(f"  Dropping {sym} from tracked buys — 3 consecutive SELL days.")
+        del tracked[sym]
+
+    if sell_alerts:
+        lines.append("🔔 <b>Tracked Buys — Now Showing SELL Signal</b>")
+        for market in STOCKS:  # preserve market order
+            alerts = sell_alerts.get(market, [])
+            if not alerts:
+                continue
+            lines.append(f"<b>{market}</b>")
+            for a in alerts:
+                drop_note = "  ⚠️ Auto-removed after 3 days" if a["cons_days"] >= 3 else f"  (day {a['cons_days']})"
+                lines.append(
+                    f"  🔴 <code>{a['symbol']}</code> {a['name']}"
+                    f"  €{a['eur']:,.2f}  Score: {a['score']:+d}  RSI: {a['rsi']}"
+                    f"  Since rec: {a['pct']}  (first picked: {a['first_rec']}){drop_note}"
+                )
+            lines.append("")
+
+    _save_tracked_buys(tracked)
 
     lines.append("⚠️ <i>Informational only. Not financial advice.</i>")
     msg = "\n".join(lines)

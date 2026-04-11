@@ -138,6 +138,40 @@
     "monthly_budget_eur": 625,
     "monthly_budget_inr": null
   },
+  "tracked_buys": {
+    "BTC-EUR": {
+      "name": "Bitcoin",
+      "market": "\u20bf Crypto",
+      "first_recommended": "2026-04-11",
+      "last_recommended": "2026-04-11",
+      "price_at_recommendation": null,
+      "consecutive_sell_days": 0
+    },
+    "RELIANCE.NS": {
+      "name": "Reliance",
+      "market": "\ud83c\uddee\ud83c\uddf3 Indian (NSE)",
+      "first_recommended": "2026-04-11",
+      "last_recommended": "2026-04-11",
+      "price_at_recommendation": null,
+      "consecutive_sell_days": 0
+    },
+    "WIPRO.NS": {
+      "name": "Wipro",
+      "market": "\ud83c\uddee\ud83c\uddf3 Indian (NSE)",
+      "first_recommended": "2026-04-11",
+      "last_recommended": "2026-04-11",
+      "price_at_recommendation": null,
+      "consecutive_sell_days": 0
+    },
+    "ASML.AS": {
+      "name": "ASML Holding",
+      "market": "\ud83c\uddea\ud83c\uddfa European",
+      "first_recommended": "2026-04-11",
+      "last_recommended": "2026-04-11",
+      "price_at_recommendation": null,
+      "consecutive_sell_days": 0
+    }
+  },
   "recommendations_log": [
     {
       "id": "616d83f3",
