@@ -48,7 +48,27 @@ Standalone script (no Streamlit), reads secrets from `.streamlit/secrets.toml` o
 
 ## Architecture
 
-There are four Python files:
+There are seven Python files, organised by single responsibility:
+
+**[constants.py](constants.py)** — Pure data and pure helper functions. No external deps. Shared by all modules:
+
+- `STOCKS`, `RISK_PARAMS` — ticker universe and risk-profile thresholds
+- `EUR_SUFFIXES`, `INR_SUFFIXES`, `is_eur_symbol`, `is_inr_symbol`, `get_mult` — currency helpers
+- `BULLISH_WORDS`, `BEARISH_WORDS` — news-sentiment keyword sets
+- `QTYPE_ICON` — quote-type emoji map
+
+**[indicators.py](indicators.py)** — Technical indicator computation and scoring. No Streamlit dependency. Shared by `stock_analyser.py` and `daily_picks.py`:
+
+- `compute_rsi / compute_macd / compute_bollinger / compute_atr / compute_stochastic` — individual indicator functions
+- `find_support_resistance`, `compute_fibonacci_levels`, `compute_pivot_points` — advanced level functions
+- `add_indicators(df)` — applies all indicators to a price DataFrame
+- `score_stock(df, risk)` — produces composite score (−10 to +10) + BUY/HOLD/SELL signal
+- `build_result(sym, name, market, df, eur_rate, inr_eur_rate, risk)` — flat result dict used by the UI
+
+**[chart_builder.py](chart_builder.py)** — Plotly chart construction. No Streamlit dependency:
+
+- `_add_level(fig, price, ...)` — draws a horizontal level line with a labelled annotation
+- `build_chart(df, symbol, name, mult, show_sr, show_fib, show_pivots, show_stoch)` — multi-panel Plotly figure
 
 **[ai_analyst.py](ai_analyst.py)** — AI-enhanced signal analysis module (no Streamlit dependency). Owns:
 
@@ -59,17 +79,13 @@ There are four Python files:
 
 **[stock_analyser.py](stock_analyser.py)** — the Streamlit app entry point. Owns:
 
-- The stock universe (`STOCKS` dict) and risk profile constants (`RISK_PARAMS`)
-- Currency conversion helpers (`get_eur_rate`, `get_inr_eur_rate`, `get_mult`) — all prices are normalised to EUR in the UI
+- `get_eur_rate`, `get_inr_eur_rate` — `@st.cache_data(ttl=300)` live FX rate fetchers
 - `fetch_stock_data` — `yfinance` download, cached 5 min via `@st.cache_data`
-- Technical indicator calculations (RSI, MACD, SMA 20/50/200, Bollinger Bands) and `compute_recommendation` which returns a score (−10 to +10) and BUY/HOLD/SELL signal
-- Advanced indicator functions (`compute_atr`, `compute_stochastic`, `find_support_resistance`, `compute_fibonacci_levels`, `compute_pivot_points`) — computed in `add_indicators` alongside existing signals
 - News sentiment (`fetch_news`, `news_sentiment`) — simple keyword scoring on Yahoo Finance headlines
-- `build_chart()` accepts `show_sr`, `show_fib`, `show_pivots`, `show_stoch` toggles (driven by checkboxes above the chart in `render_deep_dive`); adds Support/Resistance dashed lines, Fibonacci retracements, Pivot Points, and an optional 4th Stochastic panel
-- `render_deep_dive()` also has an "📐 Advanced Metrics" expander showing ATR, Stochastic %K/%D, and Pivot Point levels
 - `get_ai_signal()` — `@st.cache_data(ttl=3600)` wrapper around `ai_analyst.ai_enhanced_signal`; shown in the deep-dive signal panel as an "🤖 AI Analysis" card with signal, confidence %, and reasoning
+- `render_deep_dive()` — chart panel with overlay checkboxes, full-width AI card, Advanced Metrics expander (ATR · Stochastic · Pivots), and news list
 - `format_telegram_picks` — formats watchlist BUY picks + tracked-buy SELL alerts for Telegram
-- UI rendering: sidebar controls, watchlist tabs (including "Tracked Buy Recommendations" section), ticker search, chart panel (3-panel Plotly: candlestick+overlays, RSI, MACD), news list, portfolio tab
+- UI rendering: sidebar controls, watchlist tabs (including "Tracked Buy Recommendations" section), ticker search, portfolio tab
 
 **[portfolio_manager.py](portfolio_manager.py)** — imported by `stock_analyser.py`. Owns:
 
@@ -79,7 +95,7 @@ There are four Python files:
 - `generate_portfolio_recommendations` / `apply_recommendation` / `disapprove_recommendation` — AI-generated rebalancing suggestions with approve/reject workflow
 - `format_portfolio_telegram` — formats portfolio summary for Telegram push
 
-**[daily_picks.py](daily_picks.py)** — standalone script. Mirrors the `STOCKS` universe and indicator logic from `stock_analyser.py` (intentional duplication to keep it dependency-free from Streamlit). Each run:
+**[daily_picks.py](daily_picks.py)** — standalone script. Imports shared logic from `constants.py` and `indicators.py` (no Streamlit dep). Each run:
 
 1. Sends top BUY picks per market to Telegram
 2. For the top-3 picks per market, calls `ai_analyst.ai_enhanced_signal()` and appends the AI reasoning line to the Telegram message
