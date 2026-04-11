@@ -48,7 +48,14 @@ Standalone script (no Streamlit), reads secrets from `.streamlit/secrets.toml` o
 
 ## Architecture
 
-There are three Python files:
+There are four Python files:
+
+**[ai_analyst.py](ai_analyst.py)** — AI-enhanced signal analysis module (no Streamlit dependency). Owns:
+
+- `ai_enhanced_signal()` — sends indicator + news context to a small LLM (Groq `llama-3.1-8b-instant` first, Anthropic `claude-haiku-4-5` fallback) and returns `{signal, confidence, reasoning, provider}`
+- `build_indicator_context()` — converts the `signals` dict from `score_stock()` into human-readable strings for the prompt
+- File-based cache (`ai_analysis_cache.json`, one entry per ticker per calendar day) — prevents redundant API calls across Streamlit re-renders and `daily_picks.py` runs
+- `_get_secret()` — resolves secrets from Streamlit secrets, `.streamlit/secrets.toml`, or env vars so the module works in both Streamlit and standalone contexts
 
 **[stock_analyser.py](stock_analyser.py)** — the Streamlit app entry point. Owns:
 
@@ -57,6 +64,7 @@ There are three Python files:
 - `fetch_stock_data` — `yfinance` download, cached 5 min via `@st.cache_data`
 - Technical indicator calculations (RSI, MACD, SMA 20/50/200, Bollinger Bands) and `compute_recommendation` which returns a score (−10 to +10) and BUY/HOLD/SELL signal
 - News sentiment (`fetch_news`, `news_sentiment`) — simple keyword scoring on Yahoo Finance headlines
+- `get_ai_signal()` — `@st.cache_data(ttl=3600)` wrapper around `ai_analyst.ai_enhanced_signal`; shown in the deep-dive signal panel as an "🤖 AI Analysis" card with signal, confidence %, and reasoning
 - `format_telegram_picks` — formats watchlist BUY picks + tracked-buy SELL alerts for Telegram
 - UI rendering: sidebar controls, watchlist tabs (including "Tracked Buy Recommendations" section), ticker search, chart panel (3-panel Plotly: candlestick+overlays, RSI, MACD), news list, portfolio tab
 
@@ -71,9 +79,10 @@ There are three Python files:
 **[daily_picks.py](daily_picks.py)** — standalone script. Mirrors the `STOCKS` universe and indicator logic from `stock_analyser.py` (intentional duplication to keep it dependency-free from Streamlit). Each run:
 
 1. Sends top BUY picks per market to Telegram
-2. Persists newly recommended BUY tickers to `portfolio.json` → `tracked_buys`
-3. Checks all tracked tickers for SELL signals and appends a sell-alert section to the Telegram message
-4. Increments `consecutive_sell_days` per ticker; removes any ticker that hits 3 consecutive SELL days
+2. For the top-3 picks per market, calls `ai_analyst.ai_enhanced_signal()` and appends the AI reasoning line to the Telegram message
+3. Persists newly recommended BUY tickers to `portfolio.json` → `tracked_buys`
+4. Checks all tracked tickers for SELL signals and appends a sell-alert section to the Telegram message
+5. Increments `consecutive_sell_days` per ticker; removes any ticker that hits 3 consecutive SELL days
 
 ## Tracked Buys
 
@@ -101,7 +110,8 @@ There are three Python files:
 
 - All prices displayed to the user are in EUR. The multiplier chain is: native price × `get_mult(symbol, eur_rate, inr_eur_rate)`.
 - `portfolio.json` stores two sub-portfolios: `india` (INR) and `eu_us` (EUR), plus `tracked_buys` and `recommendations_log`.
-- `@st.cache_data(ttl=...)` is used throughout for all network calls; TTLs range from 2 min (live prices) to 30 min (news).
-- The scoring system is purely arithmetic — no ML model. Each of 6 indicators contributes ±1 or ±2 points to a composite score; the sign and magnitude of `score / 10` vs configurable thresholds determines the signal.
+- `@st.cache_data(ttl=...)` is used throughout for all network calls; TTLs range from 2 min (live prices) to 30 min (news). AI signals are cached 1 hour in Streamlit memory (`get_ai_signal`) and 24 hours on disk (`ai_analysis_cache.json`).
+- The rule-based scoring system is purely arithmetic — no ML model. Each of 6 indicators contributes ±1 or ±2 points to a composite score; the sign and magnitude of `score / 10` vs configurable thresholds determines the signal. The AI layer then validates or challenges this signal with natural-language reasoning.
+- `ai_analysis_cache.json` is git-ignored (written at runtime next to `portfolio.json`).
 - All timestamps use `Europe/Berlin` timezone (`ZoneInfo("Europe/Berlin")`), not UTC — `now_berlin()` in `stock_analyser.py`, `_now()` in `portfolio_manager.py`.
 - `Styler.map()` is used for DataFrame cell styling (pandas ≥2.1 — `.applymap()` was removed).

@@ -41,6 +41,7 @@ Open `http://localhost:8501` in your browser.
 | Interactive Charts | Plotly candlestick + SMA/BB overlays, RSI panel, MACD histogram |
 | Portfolio Tracker | Track EU/US and Indian holdings with live P&L in EUR |
 | AI Screenshot OCR | Upload a brokerage screenshot to auto-import holdings (Anthropic/Gemini/Groq) |
+| AI-Enhanced Signals | Small LLM (Groq llama-3.1-8b or Anthropic claude-haiku) validates each BUY/SELL with confidence score + reasoning — shown in deep-dive panel and Telegram digest |
 | Tracked Buy Recommendations | Previously recommended BUY tickers tracked live with current signal cards |
 | Sell Alerts | Tracked tickers showing SELL signal appear highlighted in the UI and Telegram |
 | Auto-Cleanup | Tracked tickers are automatically removed after 3 consecutive SELL days |
@@ -107,9 +108,9 @@ Copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml` and fill in:
 APP_PASSWORD       = ""          # leave empty for open access
 TELEGRAM_BOT_TOKEN = ""          # optional
 TELEGRAM_CHAT_ID   = ""          # optional
-ANTHROPIC_API_KEY  = ""          # for portfolio screenshot OCR
+ANTHROPIC_API_KEY  = ""          # portfolio screenshot OCR + AI signal fallback
 GEMINI_API_KEY     = ""          # alternative OCR provider (free)
-GROQ_API_KEY       = ""          # alternative OCR provider (free)
+GROQ_API_KEY       = ""          # AI signal analysis (free) + alternative OCR provider
 ```
 
 On Streamlit Cloud, paste the same key=value pairs in **App settings → Secrets**.
@@ -140,7 +141,9 @@ You can also trigger it manually from the **Actions** tab.
 stock_analyser.py      — Streamlit app (entry point, all UI, indicators, scoring, tracked buys UI)
 portfolio_manager.py   — Portfolio state, AI OCR, recommendations, Telegram formatting
 daily_picks.py         — Standalone Telegram digest (BUY picks + sell alerts, tracked_buys persistence)
+ai_analyst.py          — AI signal enhancer: Groq/Anthropic LLM analysis, file-based daily cache
 portfolio.json         — Persistent state: holdings, recommendations_log, tracked_buys
+ai_analysis_cache.json — Daily AI signal cache (auto-generated, git-ignored)
 .streamlit/
   config.toml          — Theme + server defaults
   secrets.toml         — API keys (git-ignored)

@@ -34,6 +34,7 @@ from portfolio_manager import (
     format_portfolio_telegram,
     _get_secret as _pf_get_secret,
 )
+from ai_analyst import ai_enhanced_signal, build_indicator_context
 
 # ─────────────────────────────────────────────
 # PAGE CONFIG
@@ -266,6 +267,37 @@ def get_live_prices(symbols: tuple) -> dict:
         except Exception:
             prices[sym] = None
     return prices
+
+
+# ─────────────────────────────────────────────
+# AI SIGNAL WRAPPER  (cached per ticker per hour)
+# ─────────────────────────────────────────────
+@st.cache_data(ttl=3600)
+def get_ai_signal(
+    symbol: str,
+    name: str,
+    rule_score: int,
+    rule_signal: str,
+    rsi_val: float | None,
+    macd_status: str,
+    sma20_pos: str,
+    sma50_pos: str,
+    bollinger_pos: str,
+    volume_status: str,
+    pct_chg_1m: float | None,
+    pct_chg_6m: float | None,
+    headlines_tuple: tuple,
+) -> dict | None:
+    """Streamlit-cached wrapper around ai_enhanced_signal."""
+    return ai_enhanced_signal(
+        symbol=symbol, name=name,
+        rule_score=rule_score, rule_signal=rule_signal,
+        rsi=rsi_val, macd_status=macd_status,
+        sma20_pos=sma20_pos, sma50_pos=sma50_pos,
+        bollinger_pos=bollinger_pos, volume_status=volume_status,
+        pct_chg_1m=pct_chg_1m, pct_chg_6m=pct_chg_6m,
+        news_headlines=list(headlines_tuple),
+    )
 
 
 # ─────────────────────────────────────────────
@@ -771,7 +803,11 @@ def build_chart(df: pd.DataFrame, symbol: str, name: str, mult: float) -> go.Fig
 # DEEP-DIVE RENDERER
 # ─────────────────────────────────────────────
 def render_deep_dive(r: dict, key_prefix: str = ""):
-    """Render signal panel + fixed chart + news for one result."""
+    """Render signal panel + fixed chart + news + AI insight for one result."""
+    # Fetch news early so headlines are available for AI analysis
+    news = fetch_news(r["symbol"])
+    headlines = [a["title"] for a in news if a.get("title")]
+
     sig_col, chart_col = st.columns([1, 3])
 
     with sig_col:
@@ -807,13 +843,59 @@ def render_deep_dive(r: dict, key_prefix: str = ""):
         st.metric("52W High",  f"€{r['high52']:,.2f}",       help=TOOLTIPS["52W High"])
         st.metric("52W Low",   f"€{r['low52']:,.2f}",        help=TOOLTIPS["52W Low"])
 
+        # ── AI-Enhanced Analysis ──────────────
+        ind_ctx = build_indicator_context(r["signals"])
+        rsi_val = float(r["rsi"]) if pd.notna(r["rsi"]) else None
+        p1m     = float(r["pct_chg_1m"]) if pd.notna(r["pct_chg_1m"]) else None
+        p6m     = float(r["pct_chg_6m"]) if pd.notna(r["pct_chg_6m"]) else None
+
+        ai = get_ai_signal(
+            symbol        = r["symbol"],
+            name          = r["name"],
+            rule_score    = r["score"],
+            rule_signal   = r["recommendation"],
+            rsi_val       = rsi_val,
+            macd_status   = ind_ctx["macd_status"],
+            sma20_pos     = ind_ctx["sma20_pos"],
+            sma50_pos     = ind_ctx["sma50_pos"],
+            bollinger_pos = ind_ctx["bollinger_pos"],
+            volume_status = ind_ctx["volume_status"],
+            pct_chg_1m    = p1m,
+            pct_chg_6m    = p6m,
+            headlines_tuple = tuple(headlines),
+        )
+        if ai:
+            sig_color  = {"BUY": "#00C853", "SELL": "#FF5252", "HOLD": "#FFB74D"}.get(
+                ai["signal"], "#aaa"
+            )
+            sig_emoji  = {"BUY": "🟢", "SELL": "🔴", "HOLD": "🟡"}.get(ai["signal"], "")
+            conf_bar   = int(ai["confidence"])
+            conf_color = (
+                "#00C853" if conf_bar >= 70
+                else ("#FFB74D" if conf_bar >= 45 else "#FF5252")
+            )
+            st.markdown(
+                f"<div style='margin-top:14px;background:#0D1B2A;border:1px solid #1E88E5;"
+                f"border-radius:8px;padding:12px;'>"
+                f"<p style='font-size:11px;color:#90CAF9;font-weight:600;margin:0 0 6px'>🤖 AI Analysis</p>"
+                f"<div style='font-size:15px;font-weight:700;color:{sig_color}'>"
+                f"  {sig_emoji} {ai['signal']}"
+                f"  <span style='font-size:11px;color:{conf_color};margin-left:6px'>"
+                f"  {conf_bar}% confidence</span>"
+                f"</div>"
+                f"<p style='font-size:11px;color:#ccc;margin:8px 0 4px;line-height:1.5'>"
+                f"{ai['reasoning']}</p>"
+                f"<p style='font-size:9px;color:#555;margin:0'>via {ai.get('provider','AI')}</p>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
     with chart_col:
         fig = build_chart(r["df"], r["symbol"], r["name"], r["mult"])
         st.plotly_chart(fig, use_container_width=True,
                         key=f"chart_{key_prefix}{r['symbol']}")
 
     # ── Latest news ──────────────────────────
-    news = fetch_news(r["symbol"])
     if news:
         sent       = news_sentiment(news)
         sent_label = ("🟢 Positive" if sent > 0
