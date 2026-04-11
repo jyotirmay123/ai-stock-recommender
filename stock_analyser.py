@@ -8,14 +8,11 @@ Supports EU, US, Indian (NSE) and Bitcoin with live currency conversion.
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import requests
-import json as _json
 import warnings
+import json as _json
 
 BERLIN = ZoneInfo("Europe/Berlin")
 
@@ -23,8 +20,17 @@ BERLIN = ZoneInfo("Europe/Berlin")
 def now_berlin() -> datetime:
     """Current datetime in Europe/Berlin timezone."""
     return datetime.now(BERLIN)
+
+
 warnings.filterwarnings("ignore")
 
+from constants import (
+    STOCKS, RISK_PARAMS, BULLISH_WORDS, BEARISH_WORDS, QTYPE_ICON,
+    is_eur_symbol, is_inr_symbol, get_mult,
+    EUR_SUFFIXES, INR_SUFFIXES,
+)
+from indicators import add_indicators, score_stock, build_result, compute_pivot_points
+from chart_builder import build_chart
 from portfolio_manager import (
     load_portfolio, save_portfolio,
     parse_screenshot_with_ai,
@@ -47,75 +53,8 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────
-# STOCK UNIVERSE
+# CURRENCY RATE FETCHERS  (Streamlit-cached)
 # ─────────────────────────────────────────────
-STOCKS = {
-    "🇪🇺 European": {
-        "ASML.AS":  "ASML Holding",
-        "SAP.DE":   "SAP SE",
-        "SIE.DE":   "Siemens",
-        "MC.PA":    "LVMH",
-        "TTE.PA":   "TotalEnergies",
-        "AIR.PA":   "Airbus",
-        "SAN.PA":   "Sanofi",
-        "DTE.DE":   "Deutsche Telekom",
-        "ALV.DE":   "Allianz",
-        "BAS.DE":   "BASF",
-    },
-    "🇺🇸 US S&P 500": {
-        "AAPL":  "Apple",
-        "MSFT":  "Microsoft",
-        "NVDA":  "NVIDIA",
-        "GOOGL": "Alphabet",
-        "AMZN":  "Amazon",
-        "META":  "Meta",
-        "TSLA":  "Tesla",
-        "JPM":   "JPMorgan Chase",
-        "V":     "Visa",
-        "JNJ":   "Johnson & Johnson",
-    },
-    "🇮🇳 Indian (NSE)": {
-        "RELIANCE.NS":   "Reliance Industries",
-        "TCS.NS":        "Tata Consultancy",
-        "INFY.NS":       "Infosys",
-        "HDFCBANK.NS":   "HDFC Bank",
-        "ICICIBANK.NS":  "ICICI Bank",
-        "WIPRO.NS":      "Wipro",
-        "BAJFINANCE.NS": "Bajaj Finance",
-        "SBIN.NS":       "State Bank of India",
-        "HINDUNILVR.NS": "Hindustan Unilever",
-        "ITC.NS":        "ITC",
-    },
-    "₿ Crypto": {
-        "BTC-EUR": "Bitcoin",
-    },
-}
-
-RISK_PARAMS = {
-    "Conservative": {"rsi_buy": 35, "rsi_sell": 65, "min_score": 4},
-    "Balanced":     {"rsi_buy": 40, "rsi_sell": 60, "min_score": 3},
-    "Aggressive":   {"rsi_buy": 45, "rsi_sell": 55, "min_score": 2},
-}
-
-# ─────────────────────────────────────────────
-# CURRENCY HELPERS
-# ─────────────────────────────────────────────
-EUR_SUFFIXES = {".AS", ".DE", ".PA", ".SW", ".BR", ".MI", ".MC",
-                ".LS", ".VI", ".HE", ".CO", ".ST", ".OL"}
-INR_SUFFIXES = {".NS", ".BO"}
-
-
-def is_eur_symbol(symbol: str) -> bool:
-    sym = symbol.upper()
-    if sym.endswith("-EUR"):
-        return True
-    return any(sym.endswith(s) for s in EUR_SUFFIXES)
-
-
-def is_inr_symbol(symbol: str) -> bool:
-    return any(symbol.upper().endswith(s) for s in INR_SUFFIXES)
-
-
 @st.cache_data(ttl=300)
 def get_eur_rate() -> float:
     """Live USD → EUR rate."""
@@ -133,15 +72,6 @@ def get_inr_eur_rate() -> float:
         return 1.0 / rate
     except Exception:
         return 1.0 / 87.5
-
-
-def get_mult(symbol: str, eur_rate: float, inr_eur_rate: float) -> float:
-    """Return multiplier to convert native price to EUR."""
-    if is_eur_symbol(symbol):
-        return 1.0
-    if is_inr_symbol(symbol):
-        return inr_eur_rate
-    return eur_rate  # USD → EUR
 
 
 # ─────────────────────────────────────────────
@@ -195,18 +125,6 @@ def resolve_ticker_name(symbol: str) -> str:
 # ─────────────────────────────────────────────
 # NEWS & SENTIMENT
 # ─────────────────────────────────────────────
-BULLISH_WORDS = {
-    "upgrade", "buy", "strong", "growth", "profit", "beat", "surge",
-    "rally", "gain", "positive", "outperform", "record", "rise", "expand",
-    "bullish", "overweight",
-}
-BEARISH_WORDS = {
-    "downgrade", "sell", "weak", "loss", "miss", "fall", "drop",
-    "decline", "negative", "underperform", "cut", "warning", "concern",
-    "bearish", "underweight",
-}
-
-
 @st.cache_data(ttl=1800)
 def fetch_news(symbol: str) -> list:
     """Fetch up to 5 recent headlines from Yahoo Finance."""
@@ -463,13 +381,6 @@ TOOLTIPS: dict = {
     ),
 }
 
-QTYPE_ICON = {
-    "EQUITY": "📈", "ETF": "🗂️", "MUTUALFUND": "🏦",
-    "INDEX": "📊", "CRYPTOCURRENCY": "₿", "CURRENCY": "💱",
-    "FUTURE": "⏳", "OPTION": "⚙️",
-}
-
-
 def tip(term: str, display: str | None = None) -> str:
     """Wrap a financial term in a hover-tooltip HTML span."""
     text    = display or term
@@ -547,426 +458,8 @@ TOOLTIP_CSS = """
 </style>
 """
 
-# ─────────────────────────────────────────────
-# TECHNICAL INDICATORS
-# ─────────────────────────────────────────────
-def compute_rsi(series: pd.Series, period: int = 14) -> pd.Series:
-    delta = series.diff()
-    gain  = delta.clip(lower=0).rolling(period).mean()
-    loss  = (-delta.clip(upper=0)).rolling(period).mean()
-    rs    = gain / loss.replace(0, np.nan)
-    return 100 - (100 / (1 + rs))
-
-
-def compute_macd(series: pd.Series):
-    ema12  = series.ewm(span=12, adjust=False).mean()
-    ema26  = series.ewm(span=26, adjust=False).mean()
-    macd   = ema12 - ema26
-    signal = macd.ewm(span=9, adjust=False).mean()
-    return macd, signal, macd - signal
-
-
-def compute_bollinger(series: pd.Series, period: int = 20, std: float = 2.0):
-    sma   = series.rolling(period).mean()
-    sigma = series.rolling(period).std()
-    return sma + std * sigma, sma, sma - std * sigma
-
-
-def compute_atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
-    """Average True Range — measures daily volatility."""
-    h, l, pc = df["High"], df["Low"], df["Close"].shift(1)
-    tr = pd.concat([(h - l), (h - pc).abs(), (l - pc).abs()], axis=1).max(axis=1)
-    return tr.ewm(span=period, adjust=False).mean()
-
-
-def compute_stochastic(df: pd.DataFrame, k: int = 14, d: int = 3) -> tuple[pd.Series, pd.Series]:
-    """Stochastic %K and %D oscillator."""
-    low_min  = df["Low"].rolling(k).min()
-    high_max = df["High"].rolling(k).max()
-    pct_k    = 100 * (df["Close"] - low_min) / (high_max - low_min).replace(0, np.nan)
-    return pct_k, pct_k.rolling(d).mean()
-
-
-def find_support_resistance(
-    close: pd.Series,
-    window: int = 5,
-    n_levels: int = 4,
-) -> tuple[list[float], list[float]]:
-    """Return (support_levels, resistance_levels) near current price."""
-    w = window * 2 + 1
-    local_min = close == close.rolling(w, center=True).min()
-    local_max = close == close.rolling(w, center=True).max()
-
-    def _cluster(levels: list[float]) -> list[float]:
-        out: list[float] = []
-        for lv in sorted(levels):
-            if not out or abs(lv - out[-1]) / max(out[-1], 1e-9) > 0.005:
-                out.append(lv)
-        return out
-
-    supports    = _cluster(sorted(close[local_min].dropna().unique()))
-    resistances = _cluster(sorted(close[local_max].dropna().unique(), reverse=True))
-    current     = float(close.iloc[-1])
-    sup = sorted(supports,    key=lambda x: abs(x - current))[:n_levels]
-    res = sorted(resistances, key=lambda x: abs(x - current))[:n_levels]
-    return sorted(sup), sorted(res, reverse=True)
-
-
-def compute_fibonacci_levels(high: float, low: float) -> dict[str, float]:
-    """Classic Fibonacci retracement levels between swing high and low."""
-    diff = high - low
-    return {
-        "Fib 100%":  high,
-        "Fib 78.6%": high - 0.214 * diff,
-        "Fib 61.8%": high - 0.382 * diff,
-        "Fib 50%":   high - 0.500 * diff,
-        "Fib 38.2%": high - 0.618 * diff,
-        "Fib 23.6%": high - 0.764 * diff,
-        "Fib 0%":    low,
-    }
-
-
-def compute_pivot_points(df: pd.DataFrame) -> dict[str, float]:
-    """Classic floor-trader pivot points from the last completed session."""
-    prev = df.iloc[-2] if len(df) > 1 else df.iloc[-1]
-    h, l, c = float(prev["High"]), float(prev["Low"]), float(prev["Close"])
-    p = (h + l + c) / 3
-    return {
-        "PP":  p,
-        "R1":  2 * p - l,  "R2": p + (h - l),
-        "S1":  2 * p - h,  "S2": p - (h - l),
-    }
-
-
-def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-    c = df["Close"]
-    df["SMA20"]  = c.rolling(20).mean()
-    df["SMA50"]  = c.rolling(50).mean()
-    df["SMA200"] = c.rolling(200).mean()
-    df["EMA12"]  = c.ewm(span=12, adjust=False).mean()
-    df["EMA26"]  = c.ewm(span=26, adjust=False).mean()
-    df["RSI"]    = compute_rsi(c)
-    df["MACD"], df["MACD_Signal"], df["MACD_Hist"] = compute_macd(c)
-    df["BB_Upper"], df["BB_Mid"], df["BB_Lower"]   = compute_bollinger(c)
-    df["Volume_MA20"]  = df["Volume"].rolling(20).mean()
-    df["ATR"]          = compute_atr(df)
-    df["Stoch_K"], df["Stoch_D"] = compute_stochastic(df)
-    return df
-
-
-# ─────────────────────────────────────────────
-# SCORING ENGINE  (max ±10 pts)
-# ─────────────────────────────────────────────
-def score_stock(df: pd.DataFrame, risk: str) -> dict:
-    params = RISK_PARAMS[risk]
-    last   = df.iloc[-1]
-    prev   = df.iloc[-2] if len(df) > 1 else last
-    signals, score = {}, 0
-
-    # 1 — RSI
-    rsi = last.get("RSI", np.nan)
-    if pd.notna(rsi):
-        if rsi < params["rsi_buy"]:
-            signals["RSI"] = ("🟢 Oversold", +2);    score += 2
-        elif rsi > params["rsi_sell"]:
-            signals["RSI"] = ("🔴 Overbought", -2);  score -= 2
-        else:
-            signals["RSI"] = ("🟡 Neutral", 0)
-
-    # 2 — MACD crossover
-    macd,   sig   = last.get("MACD", np.nan),  last.get("MACD_Signal", np.nan)
-    p_macd, p_sig = prev.get("MACD", np.nan),  prev.get("MACD_Signal", np.nan)
-    if all(pd.notna(x) for x in [macd, sig, p_macd, p_sig]):
-        if p_macd < p_sig and macd > sig:
-            signals["MACD"] = ("🟢 Bullish crossover", +2); score += 2
-        elif p_macd > p_sig and macd < sig:
-            signals["MACD"] = ("🔴 Bearish crossover", -2); score -= 2
-        elif macd > sig:
-            signals["MACD"] = ("🟢 Above signal", +1);      score += 1
-        else:
-            signals["MACD"] = ("🔴 Below signal", -1);      score -= 1
-
-    # 3 — Price vs SMA 20 / 50
-    close = last["Close"]
-    sma20, sma50, sma200 = (
-        last.get("SMA20",  np.nan),
-        last.get("SMA50",  np.nan),
-        last.get("SMA200", np.nan),
-    )
-    if pd.notna(sma20):
-        if close > sma20:
-            signals["SMA20"] = ("🟢 Above SMA20", +1); score += 1
-        else:
-            signals["SMA20"] = ("🔴 Below SMA20", -1); score -= 1
-    if pd.notna(sma50):
-        if close > sma50:
-            signals["SMA50"] = ("🟢 Above SMA50", +1); score += 1
-        else:
-            signals["SMA50"] = ("🔴 Below SMA50", -1); score -= 1
-
-    # 4 — Golden / Death Cross (SMA50 vs SMA200)
-    p_sma50, p_sma200 = prev.get("SMA50", np.nan), prev.get("SMA200", np.nan)
-    if all(pd.notna(x) for x in [sma50, sma200, p_sma50, p_sma200]):
-        if p_sma50 < p_sma200 and sma50 > sma200:
-            signals["Golden Cross"] = ("🟢 Golden Cross!", +2); score += 2
-        elif p_sma50 > p_sma200 and sma50 < sma200:
-            signals["Death Cross"]  = ("🔴 Death Cross!", -2);  score -= 2
-
-    # 5 — Bollinger Bands
-    bb_up, bb_low = last.get("BB_Upper", np.nan), last.get("BB_Lower", np.nan)
-    if pd.notna(bb_up) and pd.notna(bb_low):
-        if close < bb_low:
-            signals["Bollinger"] = ("🟢 Below lower band", +1); score += 1
-        elif close > bb_up:
-            signals["Bollinger"] = ("🔴 Above upper band", -1); score -= 1
-        else:
-            signals["Bollinger"] = ("🟡 Inside bands", 0)
-
-    # 6 — Volume confirmation
-    vol, vol_ma = last.get("Volume", np.nan), last.get("Volume_MA20", np.nan)
-    if pd.notna(vol) and pd.notna(vol_ma) and vol_ma > 0:
-        if vol > vol_ma * 1.5:
-            signals["Volume"] = ("🟢 High volume", +1); score += 1
-        else:
-            signals["Volume"] = ("🟡 Normal volume", 0)
-
-    pct = score / 10
-    if pct >= 0.3:
-        rec, rec_color, rec_emoji = "BUY",  "#00C853", "🟢"
-    elif pct <= -0.2:
-        rec, rec_color, rec_emoji = "SELL", "#D50000", "🔴"
-    else:
-        rec, rec_color, rec_emoji = "HOLD", "#FF6F00", "🟡"
-
-    high52     = df["Close"].tail(252).max()
-    low52      = df["Close"].tail(252).min()
-    pct_chg_1m = (close / df["Close"].iloc[-22] - 1) * 100 if len(df) >= 22 else np.nan
-    pct_chg_6m = (close / df["Close"].iloc[0]   - 1) * 100
-
-    return dict(
-        score=score, recommendation=rec, rec_color=rec_color, rec_emoji=rec_emoji,
-        signals=signals, rsi=rsi, close=close,
-        high52=high52, low52=low52, pct_chg_1m=pct_chg_1m, pct_chg_6m=pct_chg_6m,
-    )
-
-
-def build_result(sym: str, name: str, market: str, df: pd.DataFrame,
-                 eur_rate: float, inr_eur_rate: float, risk: str) -> dict:
-    s    = score_stock(df, risk)
-    mult = get_mult(sym, eur_rate, inr_eur_rate)
-    return dict(
-        symbol=sym, name=name, market=market, df=df, mult=mult,
-        price_eur      = s["close"]  * mult,
-        recommendation = s["recommendation"],
-        rec_emoji      = s["rec_emoji"],
-        rec_color      = s["rec_color"],
-        score          = s["score"],
-        rsi            = s["rsi"],
-        high52         = s["high52"] * mult,
-        low52          = s["low52"]  * mult,
-        pct_chg_1m     = s["pct_chg_1m"],
-        pct_chg_6m     = s["pct_chg_6m"],
-        signals        = s["signals"],
-    )
-
-
-# ─────────────────────────────────────────────
-# CHART  — candlestick + optional overlays + panels
-# ─────────────────────────────────────────────
-def _add_level(
-    fig: go.Figure,
-    price: float,
-    line_color: str,
-    dash: str,
-    label: str,
-    label_color: str,
-    x_anchor: float,          # 0.0 = left edge, 1.0 = right edge
-) -> None:
-    """Draw a horizontal price level line with a small labelled tag."""
-    fig.add_shape(
-        type="line", xref="paper", yref="y",
-        x0=0, x1=1, y0=price, y1=price,
-        line=dict(color=line_color, width=1, dash=dash),
-        layer="below",
-    )
-    fig.add_annotation(
-        xref="paper", yref="y",
-        x=x_anchor, y=price,
-        text=label, showarrow=False,
-        font=dict(size=8, color=label_color),
-        bgcolor="rgba(14,17,23,0.75)",
-        borderpad=2,
-        xanchor="left" if x_anchor < 0.5 else "right",
-        yanchor="middle",
-    )
-
-
-def build_chart(
-    df: pd.DataFrame,
-    symbol: str,
-    name: str,
-    mult: float,
-    show_sr: bool = True,
-    show_fib: bool = False,
-    show_pivots: bool = False,
-    show_stoch: bool = False,
-) -> go.Figure:
-    n_rows  = 4 if show_stoch else 3
-    heights = [0.46, 0.18, 0.18, 0.18] if show_stoch else [0.55, 0.22, 0.23]
-    fig = make_subplots(
-        rows=n_rows, cols=1, shared_xaxes=True,
-        row_heights=heights, vertical_spacing=0.04,
-    )
-
-    # ── Panel 1: Candlestick ─────────────────
-    fig.add_trace(go.Candlestick(
-        x=df.index,
-        open=df["Open"] * mult, high=df["High"] * mult,
-        low=df["Low"]   * mult, close=df["Close"] * mult,
-        name="Price",
-        increasing_line_color="#26A69A", decreasing_line_color="#EF5350",
-        showlegend=False,
-    ), row=1, col=1)
-
-    # ── Moving averages ───────────────────────
-    for label, col, color, width in [
-        ("SMA 20",  "SMA20",  "#42A5F5", 1.2),
-        ("SMA 50",  "SMA50",  "#FFA726", 1.2),
-        ("SMA 200", "SMA200", "#CE93D8", 2.2),
-    ]:
-        if col in df.columns:
-            fig.add_trace(go.Scatter(
-                x=df.index, y=df[col] * mult,
-                name=label, line=dict(color=color, width=width), opacity=0.9,
-            ), row=1, col=1)
-
-    # ── Bollinger Bands ───────────────────────
-    if "BB_Upper" in df.columns and "BB_Lower" in df.columns:
-        fig.add_trace(go.Scatter(
-            x=df.index, y=df["BB_Upper"] * mult, name="BB ±2σ",
-            line=dict(color="#78909C", dash="dot", width=1), opacity=0.6,
-        ), row=1, col=1)
-        fig.add_trace(go.Scatter(
-            x=df.index, y=df["BB_Lower"] * mult,
-            line=dict(color="#78909C", dash="dot", width=1),
-            fill="tonexty", fillcolor="rgba(120,144,156,0.07)",
-            opacity=0.6, showlegend=False,
-        ), row=1, col=1)
-
-    # ── Support & Resistance lines ────────────
-    # Labels: support on LEFT edge, resistance on RIGHT edge — never overlap
-    if show_sr:
-        supports, resistances = find_support_resistance(df["Close"])
-        for lvl in supports:
-            _add_level(fig, lvl * mult,
-                       "rgba(0,200,83,0.45)", "dash",
-                       f"S  €{lvl * mult:,.0f}", "rgba(0,220,100,0.9)", 0.01)
-        for lvl in resistances:
-            _add_level(fig, lvl * mult,
-                       "rgba(255,82,82,0.45)", "dash",
-                       f"€{lvl * mult:,.0f}  R", "rgba(255,100,100,0.9)", 0.99)
-
-    # ── Fibonacci retracement (last 90 candles = ~4 months) ──
-    if show_fib:
-        window = df.tail(90)
-        fib_high = float(window["High"].max())
-        fib_low  = float(window["Low"].min())
-        fib_pcts = {
-            "78.6": 0.214, "61.8": 0.382, "50.0": 0.500,
-            "38.2": 0.618, "23.6": 0.764,
-        }
-        # 100% and 0% are the actual high/low — skip annotation clutter
-        _add_level(fig, fib_high * mult, "rgba(251,191,36,0.5)", "dot",
-                   "100%", "#FBBF24", 0.98)
-        _add_level(fig, fib_low  * mult, "rgba(251,191,36,0.5)", "dot",
-                   "0%",   "#FBBF24", 0.98)
-        for pct_label, ratio in fib_pcts.items():
-            price = fib_high - ratio * (fib_high - fib_low)
-            _add_level(fig, price * mult, "rgba(251,191,36,0.35)", "dot",
-                       pct_label, "#FCD34D", 0.98)
-
-    # ── Pivot points — R labels right, S labels left, PP centre ─
-    if show_pivots:
-        piv = compute_pivot_points(df)
-        piv_cfg = {
-            "PP":  ("rgba(167,139,250,0.6)", "longdash", "#A78BFA", 0.50),
-            "R1":  ("rgba(248,113,113,0.6)", "longdash", "#F87171", 0.99),
-            "R2":  ("rgba(239,68,68,0.6)",   "longdash", "#EF4444", 0.99),
-            "S1":  ("rgba(74,222,128,0.6)",  "longdash", "#4ADE80", 0.01),
-            "S2":  ("rgba(22,163,74,0.6)",   "longdash", "#16A34A", 0.01),
-        }
-        for lbl, (lc, dash, fc, xa) in piv_cfg.items():
-            _add_level(fig, piv[lbl] * mult, lc, dash, lbl, fc, xa)
-
-    # ── Panel 2: RSI ─────────────────────────
-    if "RSI" in df.columns:
-        fig.add_trace(go.Scatter(
-            x=df.index, y=df["RSI"], name="RSI",
-            line=dict(color="#26C6DA", width=1.5), showlegend=False,
-        ), row=2, col=1)
-        for lvl, clr in [(70, "rgba(239,83,80,0.4)"), (50, "rgba(160,160,160,0.18)"),
-                         (30, "rgba(38,166,154,0.4)")]:
-            fig.add_hline(y=lvl, line_dash="dot", line_color=clr, row=2, col=1)
-
-    # ── Panel 3: MACD ────────────────────────
-    if "MACD_Hist" in df.columns:
-        hist_colors = ["#26A69A" if v >= 0 else "#EF5350"
-                       for v in df["MACD_Hist"].fillna(0)]
-        fig.add_trace(go.Bar(
-            x=df.index, y=df["MACD_Hist"],
-            name="Hist", marker_color=hist_colors, opacity=0.55, showlegend=False,
-        ), row=3, col=1)
-    for col_name, color, lbl in [("MACD", "#42A5F5", "MACD"),
-                                   ("MACD_Signal", "#FFA726", "Signal")]:
-        if col_name in df.columns:
-            fig.add_trace(go.Scatter(
-                x=df.index, y=df[col_name], name=lbl,
-                line=dict(color=color, width=1.3), showlegend=False,
-            ), row=3, col=1)
-
-    # ── Panel 4: Stochastic (optional) ───────
-    if show_stoch and "Stoch_K" in df.columns:
-        fig.add_trace(go.Scatter(
-            x=df.index, y=df["Stoch_K"], name="%K",
-            line=dict(color="#F472B6", width=1.3), showlegend=False,
-        ), row=4, col=1)
-        if "Stoch_D" in df.columns:
-            fig.add_trace(go.Scatter(
-                x=df.index, y=df["Stoch_D"], name="%D",
-                line=dict(color="#C084FC", width=1.3, dash="dot"), showlegend=False,
-            ), row=4, col=1)
-        for lvl, clr in [(80, "rgba(239,83,80,0.4)"), (20, "rgba(38,166,154,0.4)")]:
-            fig.add_hline(y=lvl, line_dash="dot", line_color=clr, row=4, col=1)
-
-    # ── Layout ───────────────────────────────
-    fig.update_layout(
-        height=730 if show_stoch else 660,
-        template="plotly_dark",
-        paper_bgcolor="#0E1117", plot_bgcolor="#0E1117",
-        xaxis_rangeslider_visible=False,
-        legend=dict(
-            orientation="h", yanchor="top", y=1.01, xanchor="left", x=0,
-            font=dict(size=11), bgcolor="rgba(14,17,23,0.7)",
-            bordercolor="rgba(255,255,255,0.08)", borderwidth=1,
-        ),
-        margin=dict(l=10, r=10, t=8, b=8),
-        hoverlabel=dict(bgcolor="#1A1F36", font_size=12),
-    )
-    fig.update_yaxes(tickprefix="€", tickformat=",.0f",
-                     gridcolor="rgba(255,255,255,0.05)", row=1, col=1)
-    fig.update_yaxes(title_text="RSI", title_standoff=4, range=[0, 100],
-                     title_font=dict(size=10, color="#888"),
-                     gridcolor="rgba(255,255,255,0.05)", row=2, col=1)
-    fig.update_yaxes(title_text="MACD", title_standoff=4,
-                     title_font=dict(size=10, color="#888"),
-                     gridcolor="rgba(255,255,255,0.05)", row=3, col=1)
-    if show_stoch:
-        fig.update_yaxes(title_text="Stoch %", title_standoff=4, range=[0, 100],
-                         title_font=dict(size=10, color="#888"),
-                         gridcolor="rgba(255,255,255,0.05)", row=4, col=1)
-    fig.update_xaxes(gridcolor="rgba(255,255,255,0.04)")
-    return fig
+# (indicators, chart building, and constants are in indicators.py,
+#  chart_builder.py, and constants.py respectively)
 
 
 # ─────────────────────────────────────────────

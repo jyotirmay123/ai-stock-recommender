@@ -153,7 +153,7 @@
       "first_recommended": "2026-04-11",
       "last_recommended": "2026-04-11",
       "price_at_recommendation": null,
-      "consecutive_sell_days": 0
+      "consecutive_sell_days": 1
     },
     "WIPRO.NS": {
       "name": "Wipro",
@@ -169,6 +169,14 @@
       "first_recommended": "2026-04-11",
       "last_recommended": "2026-04-11",
       "price_at_recommendation": null,
+      "consecutive_sell_days": 0
+    },
+    "SAN.PA": {
+      "name": "Sanofi",
+      "market": "\ud83c\uddea\ud83c\uddfa European",
+      "first_recommended": "2026-04-12",
+      "last_recommended": "2026-04-12",
+      "price_at_recommendation": 80.19000244140625,
       "consecutive_sell_days": 0
     }
   },

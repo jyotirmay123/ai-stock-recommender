@@ -139,10 +139,13 @@ You can also trigger it manually from the **Actions** tab.
 ## Architecture
 
 ```text
-stock_analyser.py      — Streamlit app (entry point, all UI, indicators, scoring, tracked buys UI)
-portfolio_manager.py   — Portfolio state, AI OCR, recommendations, Telegram formatting
-daily_picks.py         — Standalone Telegram digest (BUY picks + sell alerts, tracked_buys persistence)
+constants.py           — Pure data: STOCKS, RISK_PARAMS, currency helpers (no external deps)
+indicators.py          — Technical indicators + scoring engine (numpy/pandas, no Streamlit)
+chart_builder.py       — Plotly chart: candlestick + S/R + Fibonacci + Pivots + Stochastic
 ai_analyst.py          — AI signal enhancer: Groq/Anthropic LLM analysis, file-based daily cache
+stock_analyser.py      — Streamlit app: UI, FX cache wrappers, news, deep-dive, portfolio tab
+portfolio_manager.py   — Portfolio state, AI OCR, recommendations, Telegram formatting
+daily_picks.py         — Standalone Telegram digest (imports from constants + indicators)
 portfolio.json         — Persistent state: holdings, recommendations_log, tracked_buys
 ai_analysis_cache.json — Daily AI signal cache (auto-generated, git-ignored)
 .streamlit/
