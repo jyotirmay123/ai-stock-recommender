@@ -10,6 +10,9 @@ on:
     - cron: "0 6 * * 1-5"   # Mon–Fri 06:00 UTC
   workflow_dispatch:          # manual run button in GitHub UI
 
+permissions:
+  contents: read
+
 jobs:
   send-picks:
     name: Fetch & send daily BUY picks
