@@ -774,6 +774,34 @@ def build_result(sym: str, name: str, market: str, df: pd.DataFrame,
 # ─────────────────────────────────────────────
 # CHART  — candlestick + optional overlays + panels
 # ─────────────────────────────────────────────
+def _add_level(
+    fig: go.Figure,
+    price: float,
+    line_color: str,
+    dash: str,
+    label: str,
+    label_color: str,
+    x_anchor: float,          # 0.0 = left edge, 1.0 = right edge
+) -> None:
+    """Draw a horizontal price level line with a small labelled tag."""
+    fig.add_shape(
+        type="line", xref="paper", yref="y",
+        x0=0, x1=1, y0=price, y1=price,
+        line=dict(color=line_color, width=1, dash=dash),
+        layer="below",
+    )
+    fig.add_annotation(
+        xref="paper", yref="y",
+        x=x_anchor, y=price,
+        text=label, showarrow=False,
+        font=dict(size=8, color=label_color),
+        bgcolor="rgba(14,17,23,0.75)",
+        borderpad=2,
+        xanchor="left" if x_anchor < 0.5 else "right",
+        yanchor="middle",
+    )
+
+
 def build_chart(
     df: pd.DataFrame,
     symbol: str,
@@ -784,11 +812,11 @@ def build_chart(
     show_pivots: bool = False,
     show_stoch: bool = False,
 ) -> go.Figure:
-    n_rows = 4 if show_stoch else 3
-    heights = [0.45, 0.18, 0.19, 0.18] if show_stoch else [0.55, 0.22, 0.23]
+    n_rows  = 4 if show_stoch else 3
+    heights = [0.46, 0.18, 0.18, 0.18] if show_stoch else [0.55, 0.22, 0.23]
     fig = make_subplots(
         rows=n_rows, cols=1, shared_xaxes=True,
-        row_heights=heights, vertical_spacing=0.05,
+        row_heights=heights, vertical_spacing=0.04,
     )
 
     # ── Panel 1: Candlestick ─────────────────
@@ -827,56 +855,49 @@ def build_chart(
         ), row=1, col=1)
 
     # ── Support & Resistance lines ────────────
+    # Labels: support on LEFT edge, resistance on RIGHT edge — never overlap
     if show_sr:
         supports, resistances = find_support_resistance(df["Close"])
         for lvl in supports:
-            fig.add_hline(
-                y=lvl * mult, line_dash="dash",
-                line=dict(color="rgba(0,200,83,0.5)", width=1),
-                annotation_text=f"S {lvl * mult:,.0f}",
-                annotation=dict(font_size=9, font_color="rgba(0,200,83,0.8)"),
-                row=1, col=1,
-            )
+            _add_level(fig, lvl * mult,
+                       "rgba(0,200,83,0.45)", "dash",
+                       f"S  €{lvl * mult:,.0f}", "rgba(0,220,100,0.9)", 0.01)
         for lvl in resistances:
-            fig.add_hline(
-                y=lvl * mult, line_dash="dash",
-                line=dict(color="rgba(255,82,82,0.5)", width=1),
-                annotation_text=f"R {lvl * mult:,.0f}",
-                annotation=dict(font_size=9, font_color="rgba(255,82,82,0.8)"),
-                row=1, col=1,
-            )
+            _add_level(fig, lvl * mult,
+                       "rgba(255,82,82,0.45)", "dash",
+                       f"€{lvl * mult:,.0f}  R", "rgba(255,100,100,0.9)", 0.99)
 
-    # ── Fibonacci retracement levels ──────────
+    # ── Fibonacci retracement (last 90 candles = ~4 months) ──
     if show_fib:
-        fib_high = float(df["High"].tail(len(df)).max())
-        fib_low  = float(df["Low"].tail(len(df)).min())
-        fib_colors = {
-            "Fib 100%": "#F59E0B", "Fib 78.6%": "#D97706",
-            "Fib 61.8%": "#FBBF24", "Fib 50%": "#FCD34D",
-            "Fib 38.2%": "#FDE68A", "Fib 23.6%": "#FEF3C7",
-            "Fib 0%":   "#F59E0B",
+        window = df.tail(90)
+        fib_high = float(window["High"].max())
+        fib_low  = float(window["Low"].min())
+        fib_pcts = {
+            "78.6": 0.214, "61.8": 0.382, "50.0": 0.500,
+            "38.2": 0.618, "23.6": 0.764,
         }
-        for label, price in compute_fibonacci_levels(fib_high, fib_low).items():
-            fig.add_hline(
-                y=price * mult, line_dash="dot",
-                line=dict(color=fib_colors.get(label, "#F59E0B"), width=1),
-                annotation_text=label,
-                annotation=dict(font_size=9, font_color="#F59E0B"),
-                row=1, col=1,
-            )
+        # 100% and 0% are the actual high/low — skip annotation clutter
+        _add_level(fig, fib_high * mult, "rgba(251,191,36,0.5)", "dot",
+                   "100%", "#FBBF24", 0.98)
+        _add_level(fig, fib_low  * mult, "rgba(251,191,36,0.5)", "dot",
+                   "0%",   "#FBBF24", 0.98)
+        for pct_label, ratio in fib_pcts.items():
+            price = fib_high - ratio * (fib_high - fib_low)
+            _add_level(fig, price * mult, "rgba(251,191,36,0.35)", "dot",
+                       pct_label, "#FCD34D", 0.98)
 
-    # ── Pivot points ──────────────────────────
+    # ── Pivot points — R labels right, S labels left, PP centre ─
     if show_pivots:
-        piv_colors = {"PP": "#A78BFA", "R1": "#F87171", "R2": "#EF4444",
-                      "S1": "#4ADE80", "S2": "#16A34A"}
-        for label, price in compute_pivot_points(df).items():
-            fig.add_hline(
-                y=price * mult, line_dash="longdash",
-                line=dict(color=piv_colors.get(label, "#aaa"), width=1),
-                annotation_text=label,
-                annotation=dict(font_size=9, font_color=piv_colors.get(label, "#aaa")),
-                row=1, col=1,
-            )
+        piv = compute_pivot_points(df)
+        piv_cfg = {
+            "PP":  ("rgba(167,139,250,0.6)", "longdash", "#A78BFA", 0.50),
+            "R1":  ("rgba(248,113,113,0.6)", "longdash", "#F87171", 0.99),
+            "R2":  ("rgba(239,68,68,0.6)",   "longdash", "#EF4444", 0.99),
+            "S1":  ("rgba(74,222,128,0.6)",  "longdash", "#4ADE80", 0.01),
+            "S2":  ("rgba(22,163,74,0.6)",   "longdash", "#16A34A", 0.01),
+        }
+        for lbl, (lc, dash, fc, xa) in piv_cfg.items():
+            _add_level(fig, piv[lbl] * mult, lc, dash, lbl, fc, xa)
 
     # ── Panel 2: RSI ─────────────────────────
     if "RSI" in df.columns:
@@ -884,8 +905,8 @@ def build_chart(
             x=df.index, y=df["RSI"], name="RSI",
             line=dict(color="#26C6DA", width=1.5), showlegend=False,
         ), row=2, col=1)
-        for lvl, clr in [(70, "rgba(239,83,80,0.45)"), (50, "rgba(160,160,160,0.2)"),
-                         (30, "rgba(38,166,154,0.45)")]:
+        for lvl, clr in [(70, "rgba(239,83,80,0.4)"), (50, "rgba(160,160,160,0.18)"),
+                         (30, "rgba(38,166,154,0.4)")]:
             fig.add_hline(y=lvl, line_dash="dot", line_color=clr, row=2, col=1)
 
     # ── Panel 3: MACD ────────────────────────
@@ -910,16 +931,17 @@ def build_chart(
             x=df.index, y=df["Stoch_K"], name="%K",
             line=dict(color="#F472B6", width=1.3), showlegend=False,
         ), row=4, col=1)
-        fig.add_trace(go.Scatter(
-            x=df.index, y=df["Stoch_D"], name="%D",
-            line=dict(color="#C084FC", width=1.3, dash="dot"), showlegend=False,
-        ), row=4, col=1)
+        if "Stoch_D" in df.columns:
+            fig.add_trace(go.Scatter(
+                x=df.index, y=df["Stoch_D"], name="%D",
+                line=dict(color="#C084FC", width=1.3, dash="dot"), showlegend=False,
+            ), row=4, col=1)
         for lvl, clr in [(80, "rgba(239,83,80,0.4)"), (20, "rgba(38,166,154,0.4)")]:
             fig.add_hline(y=lvl, line_dash="dot", line_color=clr, row=4, col=1)
 
     # ── Layout ───────────────────────────────
     fig.update_layout(
-        height=720 if show_stoch else 660,
+        height=730 if show_stoch else 660,
         template="plotly_dark",
         paper_bgcolor="#0E1117", plot_bgcolor="#0E1117",
         xaxis_rangeslider_visible=False,
@@ -940,7 +962,7 @@ def build_chart(
                      title_font=dict(size=10, color="#888"),
                      gridcolor="rgba(255,255,255,0.05)", row=3, col=1)
     if show_stoch:
-        fig.update_yaxes(title_text="Stoch", title_standoff=4, range=[0, 100],
+        fig.update_yaxes(title_text="Stoch %", title_standoff=4, range=[0, 100],
                          title_font=dict(size=10, color="#888"),
                          gridcolor="rgba(255,255,255,0.05)", row=4, col=1)
     fig.update_xaxes(gridcolor="rgba(255,255,255,0.04)")
@@ -1038,48 +1060,14 @@ def render_deep_dive(r: dict, key_prefix: str = ""):
                 unsafe_allow_html=True,
             )
 
-        # ── Advanced Metrics ─────────────────
-        df_r = r["df"]
-        with st.expander("📐 Advanced Metrics", expanded=False):
-            atr_val = df_r["ATR"].iloc[-1] * r["mult"] if "ATR" in df_r.columns else None
-            sk_val  = df_r["Stoch_K"].iloc[-1] if "Stoch_K" in df_r.columns else None
-            sd_val  = df_r["Stoch_D"].iloc[-1] if "Stoch_D" in df_r.columns else None
-            pivots  = compute_pivot_points(df_r)
-
-            if atr_val is not None and pd.notna(atr_val):
-                st.metric(tip("ATR", "ATR (14)"),
-                          f"€{atr_val:,.2f}",
-                          help=TOOLTIPS["ATR"])
-            if sk_val is not None and pd.notna(sk_val):
-                stoch_label = (
-                    "🔴 Overbought" if sk_val > 80
-                    else ("🟢 Oversold" if sk_val < 20 else "🟡 Neutral")
-                )
-                st.metric(tip("Stochastic", "Stoch %K / %D"),
-                          f"{sk_val:.1f} / {sd_val:.1f}" if sd_val is not None else f"{sk_val:.1f}",
-                          help=TOOLTIPS["Stochastic"])
-                st.caption(stoch_label)
-
-            st.markdown(
-                f"<p style='font-size:11px;color:#90CAF9;font-weight:600;margin:8px 0 4px'>"
-                f"{tip('Pivot Points', '📍 Pivot Points')}</p>"
-                f"<div style='font-size:11px;line-height:1.8;color:#ccc'>"
-                + "".join(
-                    f"<span style='color:{'#F87171' if k.startswith('R') else ('#4ADE80' if k.startswith('S') else '#A78BFA')}'>"
-                    f"<b>{k}</b></span> €{v * r['mult']:,.2f}<br>"
-                    for k, v in pivots.items()
-                )
-                + "</div>",
-                unsafe_allow_html=True,
-            )
-
     with chart_col:
         sk = r["symbol"]
+        st.caption("Chart overlays")
         ov1, ov2, ov3, ov4 = st.columns(4)
-        show_sr    = ov1.checkbox("S/R",        value=True,  key=f"sr_{key_prefix}{sk}")
-        show_fib   = ov2.checkbox("Fibonacci",  value=False, key=f"fib_{key_prefix}{sk}")
-        show_pivots= ov3.checkbox("Pivots",     value=False, key=f"piv_{key_prefix}{sk}")
-        show_stoch = ov4.checkbox("Stochastic", value=False, key=f"sto_{key_prefix}{sk}")
+        show_sr     = ov1.checkbox("S/R levels",  value=True,  key=f"sr_{key_prefix}{sk}")
+        show_fib    = ov2.checkbox("Fibonacci",   value=False, key=f"fib_{key_prefix}{sk}")
+        show_pivots = ov3.checkbox("Pivots",      value=False, key=f"piv_{key_prefix}{sk}")
+        show_stoch  = ov4.checkbox("Stochastic",  value=False, key=f"sto_{key_prefix}{sk}")
         fig = build_chart(
             r["df"], r["symbol"], r["name"], r["mult"],
             show_sr=show_sr, show_fib=show_fib,
@@ -1087,6 +1075,54 @@ def render_deep_dive(r: dict, key_prefix: str = ""):
         )
         st.plotly_chart(fig, use_container_width=True,
                         key=f"chart_{key_prefix}{sk}")
+
+    # ── Advanced Metrics (full-width, below both columns) ────────
+    df_r    = r["df"]
+    mult    = r["mult"]
+    atr_val = float(df_r["ATR"].iloc[-1]) * mult if "ATR" in df_r.columns and pd.notna(df_r["ATR"].iloc[-1]) else None
+    sk_val  = float(df_r["Stoch_K"].iloc[-1]) if "Stoch_K" in df_r.columns and pd.notna(df_r["Stoch_K"].iloc[-1]) else None
+    sd_val  = float(df_r["Stoch_D"].iloc[-1]) if "Stoch_D" in df_r.columns and pd.notna(df_r["Stoch_D"].iloc[-1]) else None
+    pivots  = compute_pivot_points(df_r)
+
+    with st.expander("📐 Advanced Metrics — ATR  ·  Stochastic  ·  Pivot Points", expanded=False):
+        m1, m2, m3 = st.columns(3)
+
+        with m1:
+            st.markdown(f"**{tip('ATR', 'ATR (14)')}**", unsafe_allow_html=True)
+            if atr_val is not None:
+                volatility = "High" if atr_val > r["price_eur"] * 0.025 else ("Low" if atr_val < r["price_eur"] * 0.01 else "Normal")
+                vol_color  = "#FF5252" if volatility == "High" else ("#00C853" if volatility == "Low" else "#FFB74D")
+                st.metric("Daily Range (avg)", f"€{atr_val:,.2f}",
+                          help=TOOLTIPS["ATR"])
+                st.markdown(
+                    f"<span style='font-size:12px;color:{vol_color}'>Volatility: {volatility}</span>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.caption("Not enough data")
+
+        with m2:
+            st.markdown(f"**{tip('Stochastic', 'Stochastic %K / %D')}**", unsafe_allow_html=True)
+            if sk_val is not None:
+                stoch_label = "🔴 Overbought" if sk_val > 80 else ("🟢 Oversold" if sk_val < 20 else "🟡 Neutral")
+                sd_str = f" / {sd_val:.1f}" if sd_val is not None else ""
+                st.metric("%K / %D", f"{sk_val:.1f}{sd_str}", help=TOOLTIPS["Stochastic"])
+                st.caption(stoch_label)
+            else:
+                st.caption("Not enough data")
+
+        with m3:
+            st.markdown(f"**{tip('Pivot Points', 'Pivot Points (daily)')}**", unsafe_allow_html=True)
+            piv_colors_map = {"PP": "#A78BFA", "R1": "#F87171", "R2": "#EF4444",
+                              "S1": "#4ADE80", "S2": "#16A34A"}
+            rows_html = "".join(
+                f"<div style='display:flex;justify-content:space-between;padding:2px 0;"
+                f"border-bottom:1px solid #1E1E2E;font-size:12px'>"
+                f"<span style='color:{piv_colors_map.get(k,'#aaa')};font-weight:700'>{k}</span>"
+                f"<span style='color:#ddd'>€{v * mult:,.2f}</span></div>"
+                for k, v in pivots.items()
+            )
+            st.markdown(rows_html, unsafe_allow_html=True)
 
     # ── Latest news ──────────────────────────
     if news:
