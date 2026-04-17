@@ -289,6 +289,8 @@ def main():
                     f"  Since rec: {a['pct']}  (first picked: {a['first_rec']}){drop_note}"
                 )
             lines.append("")
+    else:
+        lines.append("No Sale Alert for today!!!")
 
     _save_tracked_buys(tracked)
 
